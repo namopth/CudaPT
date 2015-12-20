@@ -95,7 +95,8 @@
       <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimpd.dll"</Command>
+      <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimpd.dll"
+copy /Y "$(SolutionDir)3rdParty\anttweakbar\lib\$(Configuration)\$(Platform)\AntTweakBar64.dll" "$(TargetDir)AntTweakBar64.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -127,13 +128,15 @@
       <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimp.dll"</Command>
+      <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimp.dll"
+copy /Y "$(SolutionDir)3rdParty\anttweakbar\lib\$(Configuration)\$(Platform)\AntTweakBar64.dll" "$(TargetDir)AntTweakBar64.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h" />
     <ClInclude Include="..\include\brdfvisualizer.h" />
     <ClInclude Include="..\include\camhelper.h" />
+    <ClInclude Include="..\include\cudapt.h" />
     <ClInclude Include="..\include\geohelper.h" />
     <ClInclude Include="..\include\glhelper.h" />
     <ClInclude Include="..\include\hdrhelper.h" />
@@ -141,17 +144,25 @@
     <ClInclude Include="..\include\mathhelper.h" />
     <ClInclude Include="..\include\ModelViewWindow.h" />
     <ClInclude Include="..\include\oshelper.h" />
+    <ClInclude Include="..\include\rayhelper.h" />
+    <ClInclude Include="..\include\raytracer.h" />
     <ClInclude Include="..\include\samplinghelper.h" />
     <ClInclude Include="..\include\templatehelper.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\brdfvisualizer.cpp" />
+    <ClCompile Include="..\src\cudapt.cpp" />
     <ClCompile Include="..\src\geohelper.cpp" />
     <ClCompile Include="..\src\glhelper.cpp" />
     <ClCompile Include="..\src\hdrhelper.cpp" />
     <ClCompile Include="..\src\mathelper.cpp" />
     <ClCompile Include="..\src\ModelViewWindow.cpp" />
     <ClCompile Include="..\src\oshelper.cpp" />
+    <ClCompile Include="..\src\raytracer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\shader\FinalComposePS.glsl" />
+    <None Include="..\shader\FinalComposeVS.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

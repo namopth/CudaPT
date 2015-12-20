@@ -13,11 +13,11 @@
 #define WINDOW_HEIGHT 600
 
 
-int main()
-{
-	NPGLHelper::App mainApp;
-	return mainApp.Run(new BRDFVisualizer("BRDF Visualizer", WINDOW_WIDTH, WINDOW_HEIGHT));
-}
+//int main()
+//{
+//	NPGLHelper::App mainApp;
+//	return mainApp.Run(new BRDFVisualizer("BRDF Visualizer", WINDOW_WIDTH, WINDOW_HEIGHT));
+//}
 
 void TW_CALL BRDFButton(void * window)
 {
