@@ -5,6 +5,7 @@
 #include "camhelper.h"
 #include "mathhelper.h"
 #include "macrohelper.h"
+#include "raytracer.h"
 
 class CUDAPTWindow : public NPGLHelper::Window
 {
@@ -24,6 +25,14 @@ protected:
 
 	NPGLHelper::Effect* m_pFinalComposeEffect;
 	float m_fExposure;
+
+	NPCamHelper::FlyCamera m_cam;
+	bool m_bIsCamRotate;
+	NPMathHelper::Vec3 m_v3CamMoveDir;
+	float m_fCamSenX, m_fCamSenY;
+	float m_fCamMoveSpeed;
+	RTScene m_scene;
+	RTRenderer m_raytracer;
 
 	bool m_bIsTracing;
 	bool m_bIsWireFrame;

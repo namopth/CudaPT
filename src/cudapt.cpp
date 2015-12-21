@@ -23,6 +23,11 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_bIsSceneGUI(true)
 	, m_uiVBOQuad(0)
 	, m_uiVAOQuad(0)
+	, m_cam()
+	, m_bIsCamRotate(false)
+	, m_fCamSenX(0.01f)
+	, m_fCamSenY(.005f)
+	, m_fCamMoveSpeed(0.5f)
 {
 
 }
@@ -34,6 +39,15 @@ CUDAPTWindow::~CUDAPTWindow()
 
 int CUDAPTWindow::OnInit()
 {
+
+	m_raytracer.Init(m_iSizeW, m_iSizeH);
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(0.f, 0.f, 5.f), 1.f));
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(-5.f, 0.f, 5.f), 1.f));
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(5.f, 0.f, 5.f), 1.f));
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(0.f, 0.f, -5.f), 1.f));
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(-5.f, 0.f, -5.f), 1.f));
+	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(5.f, 0.f, -5.f), 1.f));
+
 	m_uiPTResultData.resize(m_iSizeW * m_iSizeH * 3);
 	for (int i = 0; i < m_iSizeW; i++)
 	{
@@ -81,9 +95,18 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");
 	// Camera control - bgn
 	NPMathHelper::Vec2 cursorMoved = m_v2CurrentCursorPos - m_v2LastCursorPos;
-	//Cam Control...
+	if (m_bIsCamRotate)
+	{
+		m_cam.AddPitch(-cursorMoved._x * m_fCamSenX);
+		m_cam.AddYaw(-cursorMoved._y * m_fCamSenY);
+	}
 	m_v2LastCursorPos = m_v2CurrentCursorPos;
 	// Camera control - end
+
+	if (m_v3CamMoveDir.length() > M_EPSILON)
+	{
+		m_cam.AddPosForward(m_v3CamMoveDir.normalize() * m_fCamMoveSpeed * deltaTime);
+	}
 
 	glm::mat4 proj, view, model;
 	proj = glm::perspective(45.0f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
@@ -99,15 +122,19 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	else
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	//Rendering...
+	const float* traceResult = nullptr;
 	if (m_bIsTracing)
 	{
-
+		m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
+			, m_cam.GetUp(), M_PI_2, m_scene);
+		traceResult = m_raytracer.GetResult();
 	}
 
 	m_pFinalComposeEffect->activeEffect();
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, m_uiPTResultTex);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_iSizeW, m_iSizeH, GL_RGB, GL_FLOAT, m_uiPTResultData.data());
+	if (traceResult)
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_iSizeW, m_iSizeH, GL_RGB, GL_FLOAT, traceResult);
 	m_pFinalComposeEffect->SetInt("hdrBuffer", 0);
 	m_pFinalComposeEffect->SetFloat("exposure", m_fExposure);
 	RenderScreenQuad();
@@ -142,10 +169,20 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 			break;
 		if (msg.key == GLFW_KEY_ESCAPE && msg.action == GLFW_PRESS)
 			glfwSetWindowShouldClose(m_pWindow, GL_TRUE);
+		else if (msg.key == GLFW_KEY_W)
+			m_v3CamMoveDir._z -= (msg.action == GLFW_PRESS) ? 1.f : (msg.action == GLFW_RELEASE) ? - 1.f : 0.f;
+		else if (msg.key == GLFW_KEY_S)
+			m_v3CamMoveDir._z += (msg.action == GLFW_PRESS) ? 1.f : (msg.action == GLFW_RELEASE) ? -1.f : 0.f;
+		else if (msg.key == GLFW_KEY_A)
+			m_v3CamMoveDir._x -= (msg.action == GLFW_PRESS) ? 1.f : (msg.action == GLFW_RELEASE) ? -1.f : 0.f;
+		else if (msg.key == GLFW_KEY_D)
+			m_v3CamMoveDir._x += (msg.action == GLFW_PRESS) ? 1.f : (msg.action == GLFW_RELEASE) ? -1.f : 0.f;
 		break;
 	case Window::INPUTMSG_MOUSEKEY:
 		if (TwEventMouseButtonGLFW(msg.key, msg.action))
 			break;
+		if (msg.key == GLFW_MOUSE_BUTTON_RIGHT)
+			m_bIsCamRotate = (msg.action == GLFW_PRESS);
 		break;
 	case Window::INPUTMSG_MOUSECURSOR:
 		TwEventMousePosGLFW(msg.xpos, msg.ypos);

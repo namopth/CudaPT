@@ -138,5 +138,110 @@ namespace NPCamHelper
 		glm::mat4x4 m_m4ViewMat;
 		NPMathHelper::Mat4x4 m_m4ViewMat2;
 	};
+
+	class FlyCamera : public ICamera
+	{
+	public:
+		FlyCamera()
+			: m_bIsViewMatDirty(true)
+			, m_fPitch(0.f)
+			, m_fYaw(0.f)
+			, m_fYawMin(0.f)
+			, m_fYawMax(M_PI*0.49f)
+			, m_v3CamPos(0.f, 0.f, 0.f)
+			, m_v3CamUp(0.f, 1.f, 0.f)
+		{
+		}
+
+		inline void SetYaw(const float yaw)
+		{
+			m_fYaw = yaw;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void SetPitch(const float pitch)
+		{
+			m_fPitch = pitch;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void SetPos(const NPMathHelper::Vec3 pos)
+		{
+			m_v3CamPos = pos;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void AddYaw(const float addYaw)
+		{
+			m_fYaw += addYaw;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void AddPitch(const float addPitch)
+		{
+			m_fPitch += addPitch;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void AddPos(const NPMathHelper::Vec3 pos)
+		{
+			m_v3CamPos = m_v3CamPos + pos;
+			m_bIsViewMatDirty = true;
+		}
+
+		inline void AddPosForward(const NPMathHelper::Vec3 pos)
+		{
+			NPMathHelper::Vec3 dir = GetDir();
+			NPMathHelper::Vec3 right = dir.cross(m_v3CamUp).normalize();
+			AddPos(-pos._z * dir + pos._x * right + pos._y * m_v3CamUp);
+		}
+
+		inline const float GetYaw() { return m_fYaw; }
+		inline const float GetPitch() { return m_fPitch; }
+		inline const NPMathHelper::Vec3 GetDir()
+		{
+			NPMathHelper::Vec3 dir;
+			dir._y = sin(m_fYaw);
+			dir._x = cos(m_fYaw);
+			dir._z = dir._x * cos(m_fPitch);
+			dir._x = dir._x * sin(m_fPitch);
+			return dir.normalize();
+		}
+
+		inline const NPMathHelper::Vec3 GetPos()
+		{
+			return m_v3CamPos;
+		}
+
+		inline const NPMathHelper::Vec3 GetUp()
+		{
+			return m_v3CamUp;
+		}
+
+		virtual void UpdateViewMatrix()
+		{
+			m_m4ViewMat = NPMathHelper::Mat4x4::lookAt(m_v3CamPos, m_v3CamPos + GetDir(), m_v3CamUp);
+		}
+
+		virtual const float* GetViewMatrix()
+		{
+			if (m_bIsViewMatDirty)
+			{
+				UpdateViewMatrix();
+				m_bIsViewMatDirty = false;
+			}
+			return m_m4ViewMat.GetDataColumnMajor();
+		}
+
+	protected:
+		bool m_bIsViewMatDirty;
+		float m_fPitch;
+		float m_fYaw;
+		float m_fYawMin;
+		float m_fYawMax;
+		NPMathHelper::Vec3 m_v3CamPos;
+		NPMathHelper::Vec3 m_v3CamUp;
+		NPMathHelper::Mat4x4 m_m4ViewMat;
+	};
 }
 #endif

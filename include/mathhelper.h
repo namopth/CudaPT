@@ -17,6 +17,7 @@
 #define M_SQRT2     1.41421356237309504880168872420969808   /* sqrt(2) */
 #define M_SQRT1_2   0.707106781186547524400844362104849039  /* 1/sqrt(2) */
 #define M_EPSILON	1E-9
+#define M_INF		1E20
 
 #define MAT_COLUMN_MAJOR
 
@@ -56,17 +57,17 @@ namespace NPMathHelper
 
 		inline static Vec2 normalize(const Vec2& v2Left);
 
-		inline float dot(const Vec2& other)
+		inline float dot(const Vec2& other) const
 		{
 			return dot(*this, other);
 		}
 
-		inline float length()
+		inline float length() const
 		{
 			return length(*this);
 		}
 
-		inline Vec2 normalize()
+		inline Vec2 normalize() const
 		{
 			return normalize(*this);
 		}
@@ -184,27 +185,27 @@ namespace NPMathHelper
 
 		static Vec3 transform(const Mat4x4& mat4x4Left, const Vec3& v3Right, bool pos = true);
 
-		inline Vec3 cross(const Vec3& v3Other)
+		inline Vec3 cross(const Vec3& v3Other) const
 		{
 			return cross(*this, v3Other);
 		}
 
-		inline float dot(const Vec3& v3Other)
+		inline float dot(const Vec3& v3Other) const
 		{
 			return dot(*this, v3Other);
 		}
 
-		inline float length()
+		inline float length() const
 		{
 			return length(*this);
 		}
 
-		inline Vec3 normalize()
+		inline Vec3 normalize() const
 		{
 			return normalize(*this);
 		}
 
-		inline Vec3 transform(const Mat4x4& mat4Other, bool pos = true)
+		inline Vec3 transform(const Mat4x4& mat4Other, bool pos = true) const
 		{
 			return transform(mat4Other, *this, pos);
 		}
@@ -324,22 +325,22 @@ namespace NPMathHelper
 
 		static Vec4 transform(const Mat4x4& mat4x4Left, const Vec4& v4Right);
 
-		inline float dot(const Vec4& v4Other)
+		inline float dot(const Vec4& v4Other) const
 		{
 			return dot(*this, v4Other);
 		}
 
-		inline float length()
+		inline float length() const
 		{
 			return length(*this);
 		}
 
-		inline Vec4 normalize()
+		inline Vec4 normalize() const
 		{
 			return normalize(*this);
 		}
 
-		inline Vec4 transform(const Mat4x4& mat4Other)
+		inline Vec4 transform(const Mat4x4& mat4Other) const
 		{
 			return transform(mat4Other, *this);
 		}
