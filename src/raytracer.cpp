@@ -25,6 +25,39 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 		}
 	}
 
+	NPRayHelper::Tri test = NPRayHelper::Tri(NPMathHelper::Vec3(0.f, 0.f, -2.f)
+		, NPMathHelper::Vec3(0.f, 2.f, -2.f), NPMathHelper::Vec3(-2.f, 0.f, -2.f));
+
+	NPMathHelper::Vec3 pos, norm;
+	float w, u, v;
+	if (test.intersect(r, pos, norm, w, u, v))
+	{
+		float dist = (pos - r.origPoint).length();
+		if (dist < minIntersect)
+		{
+			minIntersect = dist;
+			result.hitPosition = pos;
+			result.hitNormal = NPMathHelper::Vec3(w, u, v);
+			result.objId = 0;
+			result.objType = OBJ_SPHERE;
+		}
+	}
+
+	NPRayHelper::AABBBox test2 = NPRayHelper::AABBBox(NPMathHelper::Vec3(0.f, -4.f, 0.f)
+		, NPMathHelper::Vec3(2.f, -2.f, 2.f));
+	if (test2.intersect(r, pos, norm))
+	{
+		float dist = (pos - r.origPoint).length();
+		if (dist < minIntersect)
+		{
+			minIntersect = dist;
+			result.hitPosition = pos;
+			result.hitNormal = norm;
+			result.objId = 0;
+			result.objType = OBJ_SPHERE;
+		}
+	}
+
 	return (minIntersect < M_INF);
 }
 

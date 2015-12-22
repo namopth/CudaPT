@@ -123,6 +123,11 @@ namespace NPMathHelper
 		return Vec2(value / rhs._x, value / rhs._y);
 	}
 
+	inline const Vec2 operator / (const Vec2& lhs, const Vec2& rhs)
+	{
+		return Vec2(lhs._x / rhs._x, lhs._y / rhs._y);
+	}
+
 	inline const Vec2 operator + (const Vec2& lhs, const Vec2& rhs)
 	{
 		return Vec2(lhs._x + rhs._x, lhs._y + rhs._y);
@@ -259,6 +264,11 @@ namespace NPMathHelper
 	inline const Vec3 operator / (const float value, const Vec3& rhs)
 	{
 		return Vec3(value / rhs._x, value / rhs._y, value / rhs._z);
+	}
+
+	inline const Vec3 operator / (const Vec3& lhs, const Vec3& rhs)
+	{
+		return Vec3(lhs._x / rhs._x, lhs._y / rhs._y, lhs._z / rhs._z);
 	}
 
 	inline const Vec3 operator + (const Vec3& lhs, const Vec3& rhs)
@@ -399,6 +409,16 @@ namespace NPMathHelper
 	inline const Vec4 operator / (const Vec4& lhs, const float value)
 	{
 		return Vec4(lhs._x / value, lhs._y / value, lhs._z / value, lhs._w / value);
+	}
+
+	inline const Vec4 operator / (const float value, const Vec4& rhs)
+	{
+		return Vec4(value / rhs._x, value / rhs._y, value / rhs._z, value / rhs._w);
+	}
+
+	inline const Vec4 operator / (const Vec4& lhs, const Vec4& rhs)
+	{
+		return Vec4(lhs._x / rhs._x, lhs._y / rhs._y, lhs._z / rhs._z, lhs._w / rhs._w);
 	}
 
 	inline const Vec4 operator + (const Vec4& lhs, const Vec4& rhs)
