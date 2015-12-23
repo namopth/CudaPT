@@ -16,6 +16,9 @@
     <Filter Include="Shader Files">
       <UniqueIdentifier>{ce45eca8-6d0a-49ac-aec4-8ae72408f337}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Cuda Files">
+      <UniqueIdentifier>{0b4c48db-a480-4ae2-aa77-43f1891518d3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h">
@@ -63,6 +66,9 @@
     <ClInclude Include="..\include\rayhelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\cudaMathHelper.cuh">
+      <Filter>Cuda Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\brdfvisualizer.cpp">
@@ -100,5 +106,10 @@
     <None Include="..\shader\FinalComposePS.glsl">
       <Filter>Shader Files</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="..\src\cudaRayTracer.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

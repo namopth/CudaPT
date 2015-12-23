@@ -138,6 +138,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <ClInclude Include="..\include\atbhelper.h" />
     <ClInclude Include="..\include\brdfvisualizer.h" />
     <ClInclude Include="..\include\camhelper.h" />
+    <ClInclude Include="..\include\cudaMathHelper.cuh" />
     <ClInclude Include="..\include\cudapt.h" />
     <ClInclude Include="..\include\geohelper.h" />
     <ClInclude Include="..\include\glhelper.h" />
@@ -165,6 +166,9 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   <ItemGroup>
     <None Include="..\shader\FinalComposePS.glsl" />
     <None Include="..\shader\FinalComposeVS.glsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="..\src\cudaRayTracer.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

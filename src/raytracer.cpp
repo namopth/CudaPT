@@ -3,6 +3,10 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range2d.h>
 
+#include <iostream>
+
+int cuda_test(int a, int b);
+
 
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 {
@@ -127,6 +131,8 @@ bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NP
 	};
 
 	tbb::parallel_for(tbb::blocked_range2d< int, int >(0, m_uSizeH, 0, m_uSizeW), f);
+
+	std::cout << "test cuda :" << cuda_test(1, 1) << std::endl;
 
 	return true;
 }
