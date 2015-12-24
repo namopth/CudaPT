@@ -101,6 +101,16 @@ bool RTRenderer::Init(const unsigned int width, const unsigned int height)
 
 bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
+	return RenderCUDA(camPos, camDir, camUp, fov, scene);
+}
+
+bool RTRenderer::RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
+{
+	return true;
+}
+
+bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
+{
 	auto f = [&](const tbb::blocked_range2d< int, int >& range) {
 		for (unsigned int i = range.cols().begin(); i < range.cols().end(); i++)
 		{
