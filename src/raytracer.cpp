@@ -116,6 +116,8 @@ bool RTRenderer::RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir
 
 bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
+	NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
+	camUp = camRight.cross(camDir).normalize();
 	auto f = [&](const tbb::blocked_range2d< int, int >& range) {
 		for (unsigned int i = range.cols().begin(); i < range.cols().end(); i++)
 		{
@@ -126,8 +128,6 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 				float v = (2.f * ((float)j + 0.5f) / (float)m_uSizeH - 1.f) * tan(fov * 0.5f);
 				//float u = 2.f * ((float)i - 0.5f * m_uSizeW + 0.5f) / m_uSizeW * tan(fov * 0.5f);
 				//float v = 2.f * ((float)j - 0.5f * m_uSizeH + 0.5f) / m_uSizeH * tan(fov * 0.5f) / (float)m_uSizeW * (float)m_uSizeH;
-				NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
-				camUp = camRight.cross(camDir).normalize();
 				NPMathHelper::Vec3 dir = (camRight * u + camUp * v + camDir).normalize();
 				NPRayHelper::Ray ray(camPos, dir);
 

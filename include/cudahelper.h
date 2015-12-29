@@ -104,7 +104,7 @@ inline __hd__ float3 operator%(const float3& lhs, const float3& rhs)
 
 inline __hd__ float length(const float3& a)
 {
-	return a.x * a.x + a.y * a.y + a.z * a.z;
+	return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 }
 
 inline __hd__ float3 normalize(const float3& a)
@@ -161,7 +161,7 @@ inline __hd__ float operator*(const float2& lhs, const float2& rhs)
 
 inline __hd__ float length(const float2& a)
 {
-	return a.x * a.x + a.y * a.y;
+	return sqrt(a.x * a.x + a.y * a.y);
 }
 
 inline __hd__ float2 normalize(const float2& a)

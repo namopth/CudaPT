@@ -135,10 +135,10 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	const float* traceResult = nullptr;
 	if (m_bIsTracing)
 	{
-		m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
-			, m_cam.GetUp(), M_PI_2 * 0.5f, m_scene);
-		//m_raytracer.Render2(m_cam.GetPos(), m_cam.GetDir()
-			//, m_cam.GetUp(), M_PI_2 * 0.5f, m_cudaScene);
+		//m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
+			//, m_cam.GetUp(), M_PI_2 * 0.5f, m_scene);
+		m_raytracer.Render2(m_cam.GetPos(), m_cam.GetDir()
+			, m_cam.GetUp(), M_PI_2 * 0.5f, m_cudaScene);
 		traceResult = m_raytracer.GetResult();
 	}
 

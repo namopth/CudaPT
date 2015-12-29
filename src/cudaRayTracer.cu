@@ -123,8 +123,6 @@ void cuda_pt(float3 camPos, float3 camDir, float3 camUp, float fov, NPCudaRayHel
 	dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 	dim3 grid(width / block.x, height / block.y, 1);
 
-	if (abs(1.f - vecDot(camUp, camDir)) < 1E-5)
-		camUp = make_float3(1.f, 0.f, 0.f);
 	float3 camRight = normalize(vecCross(camDir, camUp));
 	camUp = normalize(vecCross(camRight, camDir));
 	pt_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, scene->devScene, width, height, d_result);
