@@ -6,6 +6,10 @@
 #include <iostream>
 
 int cuda_test(int a, int b);
+int cuda_test2(NPCudaRayHelper::Scene* scene);
+
+void cuda_pt(float3 camPos, float3 camDir, float3 camUp, float fov, NPCudaRayHelper::Scene* scene
+	, float width, float height, float* result);
 
 
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
@@ -101,11 +105,12 @@ bool RTRenderer::Init(const unsigned int width, const unsigned int height)
 
 bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
-	return RenderCUDA(camPos, camDir, camUp, fov, scene);
+	return RenderCPU(camPos, camDir, camUp, fov, scene);
 }
 
 bool RTRenderer::RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
+	std::cout << "test cuda :" << cuda_test(1, 1) << std::endl;
 	return true;
 }
 
@@ -117,9 +122,12 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 			for (unsigned int j = range.rows().begin(); j < range.rows().end(); j++)
 			{
 				unsigned int ind = (i + j * m_uSizeW) * 3.f;
-				float u = 2.f * ((float)i - 0.5f * m_uSizeW + 0.5f) / m_uSizeW * tan(fov * 0.5f);
-				float v = 2.f * ((float)j - 0.5f * m_uSizeH + 0.5f) / m_uSizeH * tan(fov * 0.5f) / (float)m_uSizeW * (float)m_uSizeH;
+				float u = (2.f * ((float)i + 0.5f) / (float)m_uSizeW - 1.f) * tan(fov * 0.5f) * (float)m_uSizeW / (float)m_uSizeH;
+				float v = (2.f * ((float)j + 0.5f) / (float)m_uSizeH - 1.f) * tan(fov * 0.5f);
+				//float u = 2.f * ((float)i - 0.5f * m_uSizeW + 0.5f) / m_uSizeW * tan(fov * 0.5f);
+				//float v = 2.f * ((float)j - 0.5f * m_uSizeH + 0.5f) / m_uSizeH * tan(fov * 0.5f) / (float)m_uSizeW * (float)m_uSizeH;
 				NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
+				camUp = camRight.cross(camDir).normalize();
 				NPMathHelper::Vec3 dir = (camRight * u + camUp * v + camDir).normalize();
 				NPRayHelper::Ray ray(camPos, dir);
 
@@ -132,9 +140,9 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 				}
 				else
 				{
-					m_pResult[ind] = 0;
-					m_pResult[ind + 1] = 0;
-					m_pResult[ind + 2] = 0;
+					m_pResult[ind] = dir._x;
+					m_pResult[ind + 1] = dir._y;
+					m_pResult[ind + 2] = dir._z;
 				}
 			}
 		}
@@ -142,7 +150,14 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 
 	tbb::parallel_for(tbb::blocked_range2d< int, int >(0, m_uSizeH, 0, m_uSizeW), f);
 
-	std::cout << "test cuda :" << cuda_test(1, 1) << std::endl;
+	return true;
+}
 
+bool RTRenderer::Render2(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
+	, float fov, NPCudaRayHelper::Scene &scene)
+{
+	//std::cout << "test cuda :" << cuda_test2(&scene) << std::endl;
+	cuda_pt(make_float3(camPos._x, camPos._y, camPos._z), make_float3(camDir._x, camDir._y, camDir._z),
+		make_float3(camUp._x, camUp._y, camUp._z), fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
 	return true;
 }

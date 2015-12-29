@@ -6,6 +6,7 @@
 #include "mathhelper.h"
 #include "macrohelper.h"
 #include "raytracer.h"
+#include "cudarayhelper.h"
 
 class CUDAPTWindow : public NPGLHelper::Window
 {
@@ -18,6 +19,8 @@ public:
 	virtual void OnTerminate();
 	virtual bool ShouldTerminateProgramOnTerminate() { return true; }
 	virtual void OnHandleInputMSG(const INPUTMSG &msg);
+
+	void BrowseModel();
 
 protected:
 	std::vector<float> m_uiPTResultData;
@@ -33,6 +36,7 @@ protected:
 	float m_fCamMoveSpeed;
 	RTScene m_scene;
 	RTRenderer m_raytracer;
+	NPCudaRayHelper::Scene m_cudaScene;
 
 	bool m_bIsTracing;
 	bool m_bIsWireFrame;

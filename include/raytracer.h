@@ -3,6 +3,7 @@
 
 #include "mathhelper.h"
 #include "rayhelper.h"
+#include "cudarayhelper.h"
 
 #include <vector>
 
@@ -46,6 +47,8 @@ public:
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 	bool RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
+	bool Render2(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov
+		, NPCudaRayHelper::Scene &scene);
 
 	inline const float* GetResult() { return m_pResult; }
 protected:

@@ -127,11 +127,13 @@ namespace NPRayHelper
 			float rT = te1.dot(e2) / divisor;
 			if (rT < 0.f)
 				return false;
-			u = de2.dot(t);
-			v = te1.dot(r.dir);
-			w = 1 - u - v;
-			if (u < 0.f || u > 1.f || v > 1.f || v < 0.f || w > 1.f || w < 0.f)
+			u = de2.dot(t) / divisor;
+			if (u < 0.0f || u > 1.0f)
 				return false;
+			v = te1.dot(r.dir) / divisor;
+			if (v < 0.0f || (u + v) > 1.0f)
+				return false;
+			w = 1 - u - v;
 			hitPoint = r.origPoint + rT * r.dir;
 			hitNormal = e1.cross(e2).normalize();
 			return true;

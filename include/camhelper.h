@@ -220,6 +220,9 @@ namespace NPCamHelper
 
 		virtual void UpdateViewMatrix()
 		{
+			//NPMathHelper::Vec3 dir = GetDir();
+			//NPMathHelper::Vec3 right = dir.cross(m_v3CamUp).normalize();
+			//m_v3CamUp = right.cross(dir).normalize();
 			m_m4ViewMat = NPMathHelper::Mat4x4::lookAt(m_v3CamPos, m_v3CamPos + GetDir(), m_v3CamUp);
 		}
 

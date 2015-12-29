@@ -4,6 +4,7 @@
 #include <string>
 
 #include "atbhelper.h"
+#include "oshelper.h"
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -12,6 +13,13 @@ int main()
 {
 	NPGLHelper::App mainApp;
 	return mainApp.Run(new CUDAPTWindow("Cuda PT", WINDOW_WIDTH, WINDOW_HEIGHT));
+}
+
+void TW_CALL TWBrowseModel(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseModel();
 }
 
 CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
@@ -67,6 +75,7 @@ int CUDAPTWindow::OnInit()
 	TwBar* mainBar = TwNewBar("CUDAPT");
 	ATB_ASSERT(TwDefine(" CUDAPT help='These properties defines the application behavior' "));
 	ATB_ASSERT(TwAddVarRW(mainBar, "Tracer_Enabled", TW_TYPE_BOOLCPP, &m_bIsTracing, "group='Tracer' label='Enable'"));
+	ATB_ASSERT(TwAddButton(mainBar, "addmodel", TWBrowseModel, this, "label='Add Model' group='Scene'"));
 
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())
@@ -107,6 +116,7 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	{
 		m_cam.AddPosForward(m_v3CamMoveDir.normalize() * m_fCamMoveSpeed * deltaTime);
 	}
+	m_cam.UpdateViewMatrix();
 
 	glm::mat4 proj, view, model;
 	proj = glm::perspective(45.0f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
@@ -126,7 +136,9 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	if (m_bIsTracing)
 	{
 		m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
-			, m_cam.GetUp(), M_PI_2, m_scene);
+			, m_cam.GetUp(), M_PI_2 * 0.5f, m_scene);
+		//m_raytracer.Render2(m_cam.GetPos(), m_cam.GetDir()
+			//, m_cam.GetUp(), M_PI_2 * 0.5f, m_cudaScene);
 		traceResult = m_raytracer.GetResult();
 	}
 
@@ -192,6 +204,20 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 	case Window::INPUTMSG_MOUSESCROLL:
 		m_fScrollY = msg.yoffset;
 		break;
+	}
+}
+
+void CUDAPTWindow::BrowseModel()
+{
+	std::string file = NPOSHelper::BrowseFile("All\0*.*\0Text\0*.TXT\0");
+	if (file.empty())
+		return;
+
+	if (!m_cudaScene.AddObjModel(file.c_str())){
+		std::string message = "Cannot load file ";
+		message = message + file;
+		NPOSHelper::CreateMessageBox(message.c_str(), "Load Model Data Failure", NPOSHelper::MSGBOX_OK);
+		return;
 	}
 }
 

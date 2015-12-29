@@ -1,130 +1,7 @@
-#include "cudaMathHelper.cuh"
+#include "cudahelper.h"
+#include "cudarayhelper.h"
 
-struct Ray
-{
-	float3 orig;
-	float3 dir;
-	__hd__ Ray(float3 o, float3 d) : orig(o), dir(d) {}
-};
-
-struct Sphere
-{
-	float3 center;
-	float radius;
-	__hd__ Sphere(const float3 c, const float r) : center(c), radius(r) {}
-	__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
-	{
-		float3 co = r.orig - center;
-		float a = r.dir*r.dir;
-		if (fabs(a) < M_EPSILON)
-			return false;
-		float b = 2.f * r.dir*co;
-		float c = co*co - radius * radius;
-		float root = b * b - 4.f * a * c;
-		if (root < 0)
-			return false;
-		root = sqrtf(root);
-		float t0 = fmax((-b + root) / 2.f * a, 0.f);
-		float t1 = fmax((-b - root) / 2.f * a, 0.f);
-		float t = fmin(t0, t1);
-		if (t <= 0)
-			return false;
-		hitPoint = r.orig + r.dir * t;
-		hitNormal = normalize(hitPoint - center);
-		return true;
-	}
-};
-
-
-struct AABBBox
-{
-	float3 minPoint;
-	float3 maxPoint;
-	__hd__ AABBBox(float3 min, float3 max)
-		:minPoint(min), maxPoint(max)
-	{}
-
-	__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
-	{
-		float3 modDir = r.dir;
-		modDir.x = escapeZero(modDir.x, M_EPSILON);
-		modDir.y = escapeZero(modDir.y, M_EPSILON);
-		modDir.z = escapeZero(modDir.z, M_EPSILON);
-		float3 tmin = (minPoint - r.orig) / modDir;
-		float3 tmax = (maxPoint - r.orig) / modDir;
-		float3 real_min = vecmin(tmin, tmax);
-		float3 real_max = vecmax(tmin, tmax);
-		float minmax = min(min(real_max.x, real_max.y), real_max.z);
-		float maxmin = max(max(real_min.x, real_min.y), real_min.z);
-		if (minmax >= maxmin && maxmin > M_EPSILON)
-		{
-			hitPoint = r.orig + r.dir * maxmin;
-			hitNormal = (maxmin == real_min.x) ? make_float3(1.f, 0.f, 0.f) :
-				(maxmin == real_min.y) ? make_float3(0.f, 1.f, 0.f) : make_float3(0.f, 0.f, 1.f);
-			if (hitNormal*r.dir > 0.f)
-				hitNormal = -1 * hitNormal;
-			return true;
-		}
-		return false;
-	}
-
-protected:
-	__hd__ float escapeZero(const float value, const float epsilon)
-	{
-		float result = value;
-		if (fabs(result) < epsilon)
-			result = (result > 0) ? result + epsilon : result - epsilon;
-		return result;
-	}
-	__hd__ float3 vecmin(const float3& lhs, const float3& rhs)
-	{
-		return make_float3(min(lhs.x, rhs.x), min(lhs.y, rhs.y), min(lhs.z, rhs.z));
-	}
-	__hd__ float3 vecmax(const float3& lhs, const float3& rhs)
-	{
-		return make_float3(max(lhs.x, rhs.x), max(lhs.y, rhs.y), max(lhs.z, rhs.z));
-	}
-};
-
-struct Tri
-{
-	// CCW
-	float3 p0;
-	float3 p1;
-	float3 p2;
-
-	__hd__ Tri(float3 a, float3 b, float3 c)
-		: p0(a)
-		, p1(b)
-		, p2(c)
-	{
-
-	}
-
-	__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal, float &w, float &u, float &v)
-	{
-		float3 e1 = p1 - p0;
-		float3 e2 = p2 - p0;
-		if ((e1%e2)*r.dir > 0.f) return false;
-		float3 de2 = r.dir%e2;
-		float divisor = de2*e1;
-		if (fabs(divisor) < M_EPSILON)
-			return false;
-		float3 t = r.orig - p0;
-		float3 te1 = t%e1;
-		float rT = (te1*e2) / divisor;
-		if (rT < 0.f)
-			return false;
-		u = de2*t;
-		v = te1*r.dir;
-		w = 1 - u - v;
-		if (u < 0.f || u > 1.f || v > 1.f || v < 0.f || w > 1.f || w < 0.f)
-			return false;
-		hitPoint = r.orig + rT * r.dir;
-		hitNormal = normalize(e1%e2);
-		return true;
-	}
-};
+#define BLOCK_SIZE 32
 
 __global__ void render_kernel(float* output, uint width, uint height)
 {
@@ -170,4 +47,88 @@ int cuda_test(int a, int b)
 	cudaFree(d_c);
 	
 	return c;
+}
+
+__global__ void test(const NPCudaRayHelper::Scene::DeviceScene* scene, int *c)
+{
+	*c = *scene->models[0].meshes[0].vertN;
+}
+
+__global__ void test2(int a, int *c)
+{
+	*c = a;
+}
+
+int cuda_test2(NPCudaRayHelper::Scene* scene)
+{
+	int c;
+	int *d_c;
+	int size = sizeof(int);
+	scene->GenerateDeviceData();
+	if (scene->models.size() > 0)
+	{
+		cudaMalloc((void**)&d_c, size);
+		test << < 1, 1 >> >(scene->devScene, d_c);
+
+		cudaMemcpy(&c, d_c, size, cudaMemcpyDeviceToHost);
+
+		cudaFree(d_c);
+		return c;
+	}
+	return 0;
+}
+
+__global__ void pt_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov
+	, NPCudaRayHelper::Scene::DeviceScene* scene
+	, float width, float height, float* result)
+{
+	uint x = blockIdx.x * blockDim.x + threadIdx.x;
+	uint y = blockIdx.y * blockDim.y + threadIdx.y;
+	uint ind = (y * width + x) * 3;
+	int threadId = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
+
+	float u = (2.f * ((float)x + 0.5f) / width - 1.f) * tan(fov * 0.5f) * width / height;
+	float v = (2.f * ((float)y + 0.5f) / height - 1.f) * tan(fov * 0.5f);
+	float3 dir = normalize(camRight * u + camUp * v + camDir);
+	NPCudaRayHelper::Ray ray(camPos, dir);
+
+	{
+		uint modelId, meshId, triId;
+		float hitDist;
+		float _w, _u, _v;
+		if (scene->Intersect(ray, modelId, meshId, triId, hitDist, _w, _u, _v))
+		{
+			result[ind] = _w;
+			result[ind + 1] = _u;
+			result[ind + 2] = _v;
+		}
+		else
+		{
+			result[ind] = dir.x;
+			result[ind + 1] = dir.y;
+			result[ind + 2] = dir.z;
+		}
+	}
+}
+
+void cuda_pt(float3 camPos, float3 camDir, float3 camUp, float fov, NPCudaRayHelper::Scene* scene
+	,float width, float height, float* result)
+{
+	float *d_result;
+	int size = sizeof(float) * 3 * width * height;
+	cudaMalloc((void**)&d_result, size);
+
+	scene->GenerateDeviceData();
+
+	dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
+	dim3 grid(width / block.x, height / block.y, 1);
+
+	if (abs(1.f - vecDot(camUp, camDir)) < 1E-5)
+		camUp = make_float3(1.f, 0.f, 0.f);
+	float3 camRight = normalize(vecCross(camDir, camUp));
+	camUp = normalize(vecCross(camRight, camDir));
+	pt_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, scene->devScene, width, height, d_result);
+
+	cudaMemcpy(result, d_result, size, cudaMemcpyDeviceToHost);
+	cudaFree(d_result);
 }
