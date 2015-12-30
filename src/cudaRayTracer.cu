@@ -1,7 +1,7 @@
 #include "cudahelper.h"
 #include "cudarayhelper.h"
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 
 __global__ void render_kernel(float* output, uint width, uint height)
 {

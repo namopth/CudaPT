@@ -159,6 +159,6 @@ $RECYCLE.BIN/
 !3rdparty/*
 !3rdparty/**/*
 
-!model/
-!model/*
-!model/**/*
+!asset/
+!asset/*
+!asset/**/*

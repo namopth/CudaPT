@@ -84,13 +84,19 @@ namespace NPCudaRayHelper
 				vertex.pos.x = mesh->mVertices[j].x;
 				vertex.pos.y = mesh->mVertices[j].y;
 				vertex.pos.z = mesh->mVertices[j].z;
-				vertex.normal.x = mesh->mNormals[j].x;
-				vertex.normal.y = mesh->mNormals[j].y;
-				vertex.normal.z = mesh->mNormals[j].z;
-				vertex.tangent.x = mesh->mTangents[j].x;
-				vertex.tangent.y = mesh->mTangents[j].y;
-				vertex.tangent.z = mesh->mTangents[j].z;
-				if (mesh->mTextureCoords[0])
+				if (mesh->mNormals)
+				{
+					vertex.normal.x = mesh->mNormals[j].x;
+					vertex.normal.y = mesh->mNormals[j].y;
+					vertex.normal.z = mesh->mNormals[j].z;
+				}
+				if (mesh->mTangents)
+				{
+					vertex.tangent.x = mesh->mTangents[j].x;
+					vertex.tangent.y = mesh->mTangents[j].y;
+					vertex.tangent.z = mesh->mTangents[j].z;
+				}
+				if (mesh->mTextureCoords && mesh->mTextureCoords[0])
 				{
 					vertex.texCoord.x = mesh->mTextureCoords[0][j].x;
 					vertex.texCoord.y = mesh->mTextureCoords[0][j].y;

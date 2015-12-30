@@ -238,6 +238,8 @@ namespace NPCudaRayHelper
 			_u = u;
 			_v = v;
 			dist = vecDot(e2, qvec) * det;
+			if (dist < 0.f)
+				return false;
 			return true;
 
 			//if ((e1%e2)*r.dir > 0.f) return false;

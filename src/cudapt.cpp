@@ -35,7 +35,7 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_bIsCamRotate(false)
 	, m_fCamSenX(0.01f)
 	, m_fCamSenY(.005f)
-	, m_fCamMoveSpeed(0.5f)
+	, m_fCamMoveSpeed(20.0f)
 {
 
 }
