@@ -18,6 +18,7 @@
 #define M_SQRT1_2   0.707106781186547524400844362104849039  /* 1/sqrt(2) */
 #define M_EPSILON	1E-9
 #define M_INF		1E20
+#define M_MIN_INF	-1E20
 
 #define MAT_COLUMN_MAJOR
 

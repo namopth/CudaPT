@@ -54,6 +54,21 @@ namespace NPRayHelper
 			:minPoint(min), maxPoint(max)
 		{}
 
+		bool intersect(const Ray &r)
+		{
+			NPMathHelper::Vec3 modDir = r.dir;
+			modDir._x = escapeZero(modDir._x, M_EPSILON);
+			modDir._y = escapeZero(modDir._y, M_EPSILON);
+			modDir._z = escapeZero(modDir._z, M_EPSILON);
+			NPMathHelper::Vec3 tmin = (minPoint - r.origPoint) / modDir;
+			NPMathHelper::Vec3 tmax = (maxPoint - r.origPoint) / modDir;
+			NPMathHelper::Vec3 real_min = vecmin(tmin, tmax);
+			NPMathHelper::Vec3 real_max = vecmax(tmin, tmax);
+			float minmax = std::min(std::min(real_max._x, real_max._y), real_max._z);
+			float maxmin = std::max(std::max(real_min._x, real_min._y), real_min._z);
+			return (minmax >= maxmin && maxmin > M_EPSILON);
+		}
+
 		bool intersect(const Ray &r, NPMathHelper::Vec3 &hitPoint, NPMathHelper::Vec3 &hitNormal)
 		{
 			NPMathHelper::Vec3 modDir = r.dir;
