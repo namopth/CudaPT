@@ -4,8 +4,30 @@
 #include "mathhelper.h"
 #include "rayhelper.h"
 #include "cudarayhelper.h"
+#include "bvhhelper.h"
 
 #include <vector>
+
+struct RTVertex
+{
+	NPMathHelper::Vec3 pos;
+	NPMathHelper::Vec3 norm;
+	NPMathHelper::Vec3 tan;
+	NPMathHelper::Vec2 tex;
+};
+
+struct RTTriangle
+{
+	uint32 vertInd0;
+	uint32 vertInd1;
+	uint32 vertInd2;
+	uint32 matInd;
+};
+
+struct RTMaterial
+{
+
+};
 
 class RTScene
 {
@@ -32,9 +54,14 @@ public:
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
 
 	void AddSphere(NPRayHelper::Sphere sphere) { m_vSpheres.push_back(sphere); }
+	bool AddModel(const char* filename);
 
+	std::vector<RTVertex> m_pVertices;
+	std::vector<RTTriangle> m_pTriangles;
+	std::vector<RTMaterial> m_pMaterials;
 protected:
 	std::vector<NPRayHelper::Sphere> m_vSpheres;
+	NPBVHHelper::BVHNode bvhRootNode;
 
 };
 

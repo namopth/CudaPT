@@ -212,8 +212,8 @@ void CUDAPTWindow::BrowseModel()
 	std::string file = NPOSHelper::BrowseFile("All\0*.*\0Text\0*.TXT\0");
 	if (file.empty())
 		return;
-
-	if (!m_cudaScene.AddObjModel(file.c_str())){
+	if (!m_scene.AddModel(file.c_str())){
+	//if (!m_cudaScene.AddObjModel(file.c_str())){
 		std::string message = "Cannot load file ";
 		message = message + file;
 		NPOSHelper::CreateMessageBox(message.c_str(), "Load Model Data Failure", NPOSHelper::MSGBOX_OK);

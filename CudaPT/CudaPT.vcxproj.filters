@@ -72,6 +72,9 @@
     <ClInclude Include="..\include\cudarayhelper.h">
       <Filter>Cuda Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\bvhhelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\brdfvisualizer.cpp">
@@ -99,6 +102,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\raytracer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\bvhhelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

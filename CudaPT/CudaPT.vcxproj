@@ -137,6 +137,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h" />
     <ClInclude Include="..\include\brdfvisualizer.h" />
+    <ClInclude Include="..\include\bvhhelper.h" />
     <ClInclude Include="..\include\camhelper.h" />
     <ClInclude Include="..\include\cudahelper.h" />
     <ClInclude Include="..\include\cudarayhelper.h" />
@@ -155,6 +156,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\brdfvisualizer.cpp" />
+    <ClCompile Include="..\src\bvhhelper.cpp" />
     <ClCompile Include="..\src\cudapt.cpp" />
     <ClCompile Include="..\src\geohelper.cpp" />
     <ClCompile Include="..\src\glhelper.cpp" />

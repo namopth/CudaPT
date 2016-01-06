@@ -17,10 +17,16 @@
 #define M_SQRT2     1.41421356237309504880168872420969808   /* sqrt(2) */
 #define M_SQRT1_2   0.707106781186547524400844362104849039  /* 1/sqrt(2) */
 #define M_EPSILON	1E-9
+#define M_FLT_EPSILON 1E-5
+#define M_FLT_BIAS_EPSILON 1E-4
 #define M_INF		1E20
 #define M_MIN_INF	-1E20
 
+#define XORSWAP(a, b)	((a)^=(b),(b)^=(a),(a)^=(b))
+
 #define MAT_COLUMN_MAJOR
+
+typedef unsigned __int32 uint32;
 
 namespace NPMathHelper
 {
@@ -191,6 +197,16 @@ namespace NPMathHelper
 
 		static Vec3 transform(const Mat4x4& mat4x4Left, const Vec3& v3Right, bool pos = true);
 
+		inline static Vec3 min(const Vec3& v3Left, const Vec3& v3Right)
+		{
+			return Vec3(fmin(v3Left._x, v3Right._x), fmin(v3Left._y, v3Right._y), fmin(v3Left._z, v3Right._z));
+		}
+
+		inline static Vec3 max(const Vec3& v3Left, const Vec3& v3Right)
+		{
+			return Vec3(fmax(v3Left._x, v3Right._x), fmax(v3Left._y, v3Right._y), fmax(v3Left._z, v3Right._z));
+		}
+
 		inline Vec3 cross(const Vec3& v3Other) const
 		{
 			return cross(*this, v3Other);
@@ -214,6 +230,16 @@ namespace NPMathHelper
 		inline Vec3 transform(const Mat4x4& mat4Other, bool pos = true) const
 		{
 			return transform(mat4Other, *this, pos);
+		}
+
+		inline Vec3 min(const Vec3& v3Right) const
+		{
+			return min(*this, v3Right);
+		}
+
+		inline Vec3 max(const Vec3& v3Right) const
+		{
+			return max(*this, v3Right);
 		}
 
 		inline const bool operator == (const Vec3& v3Other) const

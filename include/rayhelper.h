@@ -54,7 +54,27 @@ namespace NPRayHelper
 			:minPoint(min), maxPoint(max)
 		{}
 
-		bool intersect(const Ray &r)
+		static AABBBox merge(const AABBBox &lhs, const AABBBox &rhs)
+		{
+			return AABBBox(lhs.minPoint.min(rhs.minPoint), lhs.maxPoint.max(rhs.maxPoint));
+		}
+
+		static AABBBox merge(const AABBBox &lhs, const NPMathHelper::Vec3 &pos)
+		{
+			return AABBBox(lhs.minPoint.min(pos), lhs.maxPoint.max(pos));
+		}
+
+		AABBBox merge(const AABBBox &rhs) const
+		{
+			return merge(*this, rhs);
+		}
+
+		AABBBox merge(const NPMathHelper::Vec3 &pos) const
+		{
+			return merge(*this, pos);
+		}
+
+		float intersect(const Ray &r)
 		{
 			NPMathHelper::Vec3 modDir = r.dir;
 			modDir._x = escapeZero(modDir._x, M_EPSILON);
@@ -66,7 +86,9 @@ namespace NPRayHelper
 			NPMathHelper::Vec3 real_max = vecmax(tmin, tmax);
 			float minmax = std::min(std::min(real_max._x, real_max._y), real_max._z);
 			float maxmin = std::max(std::max(real_min._x, real_min._y), real_min._z);
-			return (minmax >= maxmin && maxmin > M_EPSILON);
+			if (minmax >= maxmin && maxmin > M_EPSILON)
+				return maxmin;
+			return M_MIN_INF;
 		}
 
 		bool intersect(const Ray &r, NPMathHelper::Vec3 &hitPoint, NPMathHelper::Vec3 &hitNormal)
@@ -126,6 +148,30 @@ namespace NPRayHelper
 			, p2(c)
 		{
 
+		}
+
+		float intersect(const Ray &r, float &w, float &u, float &v)
+		{
+			NPMathHelper::Vec3 e1 = p1 - p0;
+			NPMathHelper::Vec3 e2 = p2 - p0;
+			if (e1.cross(e2).dot(r.dir) > 0.f) return false;
+			NPMathHelper::Vec3 de2 = r.dir.cross(e2);
+			float divisor = de2.dot(e1);
+			if (fabs(divisor) < M_EPSILON)
+				return M_MIN_INF;
+			NPMathHelper::Vec3 t = r.origPoint - p0;
+			NPMathHelper::Vec3 te1 = t.cross(e1);
+			float rT = te1.dot(e2) / divisor;
+			if (rT < 0.f)
+				return M_MIN_INF;
+			u = de2.dot(t) / divisor;
+			if (u < 0.0f || u > 1.0f)
+				return M_MIN_INF;
+			v = te1.dot(r.dir) / divisor;
+			if (v < 0.0f || (u + v) > 1.0f)
+				return M_MIN_INF;
+			w = 1 - u - v;
+			return rT;
 		}
 
 		bool intersect(const Ray &r, NPMathHelper::Vec3 &hitPoint, NPMathHelper::Vec3 &hitNormal, float &w, float &u, float &v)

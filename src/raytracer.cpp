@@ -5,6 +5,10 @@
 
 #include <iostream>
 
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
 int cuda_test(int a, int b);
 int cuda_test2(NPCudaRayHelper::Scene* scene);
 
@@ -67,6 +71,95 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 	}
 
 	return (minIntersect < M_INF);
+}
+
+__host__ void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
+{
+	for (uint i = 0; i < node->mNumMeshes; i++)
+	{
+		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+		uint indicesOffset = mainScene->m_pVertices.size();
+		for (uint j = 0; j < mesh->mNumVertices; j++)
+		{
+			RTVertex vertex;
+			vertex.pos._x = mesh->mVertices[j].x;
+			vertex.pos._y = mesh->mVertices[j].y;
+			vertex.pos._z = mesh->mVertices[j].z;
+			if (mesh->mNormals)
+			{
+				vertex.norm._x = mesh->mNormals[j].x;
+				vertex.norm._y = mesh->mNormals[j].y;
+				vertex.norm._z = mesh->mNormals[j].z;
+			}
+			if (mesh->mTangents)
+			{
+				vertex.tan._x = mesh->mTangents[j].x;
+				vertex.tan._y = mesh->mTangents[j].y;
+				vertex.tan._z = mesh->mTangents[j].z;
+			}
+			if (mesh->mTextureCoords && mesh->mTextureCoords[0])
+			{
+				vertex.tex._x = mesh->mTextureCoords[0][j].x;
+				vertex.tex._y = mesh->mTextureCoords[0][j].y;
+			}
+			mainScene->m_pVertices.push_back(vertex);
+		}
+
+		for (uint j = 0; j < mesh->mNumFaces; j++)
+		{
+			aiFace face = mesh->mFaces[j];
+			RTTriangle tri;
+			for (uint k = 0; k < face.mNumIndices; k++)
+			{
+				uint ind = k % 3;
+				if (ind == 0)
+					tri.vertInd0 = indicesOffset + face.mIndices[k];
+				else if (ind == 1)
+					tri.vertInd1 = indicesOffset + face.mIndices[k];
+				else
+				{
+					tri.vertInd2 = indicesOffset + face.mIndices[k];
+					mainScene->m_pTriangles.push_back(tri);
+				}
+			}
+		}
+	}
+
+	for (uint i = 0; i < node->mNumChildren; i++)
+	{
+		AssimpProcessNode(mainScene, node->mChildren[i], scene);
+	}
+}
+
+bool RTScene::AddModel(const char* filename)
+{
+	Assimp::Importer importer;
+	std::string sPath = filename;
+	const aiScene* scene = importer.ReadFile(sPath.c_str(), aiProcess_Triangulate | aiProcess_FlipUVs
+		| aiProcess_CalcTangentSpace | aiProcess_GenNormals);
+	if (!scene || scene->mFlags == AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	{
+		return false;
+	}
+	std::string dir = sPath.substr(0, sPath.find_last_of('\\'));
+	AssimpProcessNode(this, scene->mRootNode, scene);
+
+	std::vector<uint32> tris;
+	for (auto &tri : m_pTriangles)
+	{
+		tris.push_back(tri.vertInd0);
+		tris.push_back(tri.vertInd1);
+		tris.push_back(tri.vertInd2);
+	}
+	std::vector<NPMathHelper::Vec3> verts;
+	for (auto &vert : m_pVertices)
+	{
+		verts.push_back(vert.pos);
+	}
+	bvhRootNode.Clear();
+	std::vector<uint32> reorderedTriOrder = NPBVHHelper::CreateBVH(&bvhRootNode, tris, verts);
+
+	return true;
 }
 
 RTRenderer::RTRenderer()
