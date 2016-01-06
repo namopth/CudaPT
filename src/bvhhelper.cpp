@@ -50,13 +50,19 @@ namespace NPBVHHelper
 		if (triN <= 0) 
 			return;
 		// calculate bound
+		NPRayHelper::AABBBox centroidBound(NPMathHelper::Vec3(M_INF, M_INF, M_INF), NPMathHelper::Vec3(M_MIN_INF, M_MIN_INF, M_MIN_INF));
 		for (uint32 i = 0; i < triN; i++)
 		{
 			uint32 ind = reorderedTriOrder[triStart + i];
 			node->bound = node->bound.merge(bvhTris[ind].bound);
+			centroidBound = centroidBound.merge(bvhTris[ind].centroid);
 		}
+		//std::cout << "==node==" << std::endl;
+		//for (uint32 i = 0; i != 32; i++)
+		//	std::cout << reorderedTriOrder[i] << " ";
+		//std::cout << std::endl;
 
-		NPMathHelper::Vec3 boundDia = node->bound.maxPoint - node->bound.minPoint;
+		NPMathHelper::Vec3 boundDia = centroidBound.maxPoint - centroidBound.minPoint;
 		if (boundDia._x < 0 || boundDia._y < 0 || boundDia._z < 0)
 			return;
 		if (triN == 1 || boundDia.length() < M_EPSILON)
@@ -71,14 +77,14 @@ namespace NPBVHHelper
 		// calculate bins
 		BVHBIN binData[BVH_SAH_BIN_N];
 		{
-			//auto f = [&](const tbb::blocked_range< int >& range) {
-			//	for (unsigned int i = range.begin(); i < range.end(); i++)
-			for (unsigned int i = 0; i < BVH_SAH_BIN_N; i++)
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+			//for (unsigned int i = 0; i < BVH_SAH_BIN_N; i++)
 				{
-					float binRangeStart = node->bound.minPoint._e[splitAxis] + (float)i * longestAxisLength / (float)BVH_SAH_BIN_N;
-					float binRangeEnd = node->bound.minPoint._e[splitAxis] + (float)(i + 1) * longestAxisLength / (float)BVH_SAH_BIN_N;
+					float binRangeStart = centroidBound.minPoint._e[splitAxis] + (float)i * longestAxisLength / (float)BVH_SAH_BIN_N;
+					float binRangeEnd = centroidBound.minPoint._e[splitAxis] + (float)(i + 1) * longestAxisLength / (float)BVH_SAH_BIN_N;
 					if (i + 1 == BVH_SAH_BIN_N)
-						binRangeEnd = node->bound.maxPoint._e[splitAxis] + M_FLT_BIAS_EPSILON;
+						binRangeEnd = centroidBound.maxPoint._e[splitAxis] + M_FLT_BIAS_EPSILON;
 					for (uint32 j = 0; j < triN; j++)
 					{
 						uint32 ind = reorderedTriOrder[triStart + j];
@@ -89,14 +95,10 @@ namespace NPBVHHelper
 							//binData[i].bound = binData[i].bound.merge(bvhTris[ind].bound);
 							binData[i].centroidBound = binData[i].centroidBound.merge(bvhTris[ind].centroid);
 						}
-						else if (triPos < node->bound.minPoint._e[splitAxis] || triPos > node->bound.maxPoint._e[splitAxis])
-						{
-							return;
-						}
 					}
 				}
-			//};
-			//tbb::parallel_for(tbb::blocked_range< int >(0, BVH_SAH_BIN_N), f);
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, BVH_SAH_BIN_N), f);
 		}
 
 		//Calculate heuristic value for each case
@@ -104,9 +106,9 @@ namespace NPBVHHelper
 		float binHeu[BVH_SAH_BIN_N];
 		{
 			// two thread from head to mid and last to mid
-			//auto f = [&](const tbb::blocked_range< int >& range) {
-			//	for (unsigned int i = range.begin(); i < range.end(); i++)
-			for (unsigned int i = 0; i < 2; i++)
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+			//for (unsigned int i = 0; i < 2; i++)
 				{
 					uint32 startBin = 0;
 					uint32 endBin = BVH_SAH_BIN_N / 2;
@@ -134,8 +136,8 @@ namespace NPBVHHelper
 						binHeu[j] = 0.125f + (mainAccumN * AABBSurfaceArea(mainAccumBound) + opN * AABBSurfaceArea(opBount)) / nodeSurfaceArea;
 					}
 				}
-			//};
-			//tbb::parallel_for(tbb::blocked_range< int >(0, 2), f);
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, 2), f);
 		}
 
 		//Choose the best splitting bin
@@ -157,7 +159,7 @@ namespace NPBVHHelper
 		//re order tri order
 		uint32 mid = triStart;
 		{
-			float binSplit = (float)(minBinN + 1) * longestAxisLength / (float)BVH_SAH_BIN_N;
+			float binSplit = centroidBound.minPoint._e[splitAxis] + (float)(minBinN + 1) * longestAxisLength / (float)BVH_SAH_BIN_N;
 
 			uint32 left = triStart;
 			uint32 right = triStart + triN - 1;
@@ -176,6 +178,20 @@ namespace NPBVHHelper
 				mid = left;
 			else
 				mid = left - 1;
+
+
+			//std::cout << "==reordered split at" << binSplit << "==" << std::endl;
+			//for (uint32 i = 0; i != 32; i++)
+			//{
+			//	if (triStart == i)
+			//		std::cout << "[";
+			//	std::cout << bvhTris[reorderedTriOrder[i]].centroid._e[splitAxis] << " ";
+			//	if (i == triStart + triN - 1)
+			//		std::cout << "]";
+			//	if (i == mid)
+			//		std::cout << "|";
+			//}
+			//std::cout << std::endl;
 		}
 
 		//recursive
@@ -198,9 +214,9 @@ namespace NPBVHHelper
 		uint32* rawReorderedTriOrder = new uint32[triSize];
 		BVHTriangle* rawBVHTris = new BVHTriangle[triSize];
 		{
-			//auto f = [&](const tbb::blocked_range< int >& range) {
-			//	for (unsigned int i = range.begin(); i < range.end(); i++)
-			for (unsigned int i = 0; i < triSize; i++)
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+			//for (unsigned int i = 0; i < triSize; i++)
 				{
 					rawReorderedTriOrder[i] = i;
 					rawBVHTris[i].vertInd[0] = tri[i * 3];
@@ -210,8 +226,8 @@ namespace NPBVHHelper
 					rawBVHTris[i].bound.minPoint = vert[tri[i * 3 + 2]].min(vert[tri[i * 3 + 1]].min(vert[tri[i * 3]]));
 					rawBVHTris[i].bound.maxPoint = vert[tri[i * 3 + 2]].max(vert[tri[i * 3 + 1]].max(vert[tri[i * 3]]));
 				}
-			//};
-			//tbb::parallel_for(tbb::blocked_range< int >(0, triSize), f);
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, triSize), f);
 		}
 
 		// Our journey start here!
