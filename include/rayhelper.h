@@ -88,7 +88,7 @@ namespace NPRayHelper
 			float maxmin = std::max(std::max(real_min._x, real_min._y), real_min._z);
 			if (minmax >= maxmin/* && maxmin > M_EPSILON*/)
 				return (maxmin > M_EPSILON) ? maxmin : 0;
-			return M_MIN_INF;
+			return M_INF;
 		}
 
 		bool intersect(const Ray &r, NPMathHelper::Vec3 &hitPoint, NPMathHelper::Vec3 &hitNormal)
@@ -154,22 +154,22 @@ namespace NPRayHelper
 		{
 			NPMathHelper::Vec3 e1 = p1 - p0;
 			NPMathHelper::Vec3 e2 = p2 - p0;
-			if (e1.cross(e2).dot(r.dir) > 0.f) return false;
+			if (e1.cross(e2).dot(r.dir) > 0.f) return M_INF;
 			NPMathHelper::Vec3 de2 = r.dir.cross(e2);
 			float divisor = de2.dot(e1);
 			if (fabs(divisor) < M_EPSILON)
-				return M_MIN_INF;
+				return M_INF;
 			NPMathHelper::Vec3 t = r.origPoint - p0;
 			NPMathHelper::Vec3 te1 = t.cross(e1);
 			float rT = te1.dot(e2) / divisor;
 			if (rT < 0.f)
-				return M_MIN_INF;
+				return M_INF;
 			u = de2.dot(t) / divisor;
 			if (u < 0.0f || u > 1.0f)
-				return M_MIN_INF;
+				return M_INF;
 			v = te1.dot(r.dir) / divisor;
 			if (v < 0.0f || (u + v) > 1.0f)
-				return M_MIN_INF;
+				return M_INF;
 			w = 1 - u - v;
 			return rT;
 		}

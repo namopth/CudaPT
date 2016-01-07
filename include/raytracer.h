@@ -75,6 +75,12 @@ protected:
 class RTRenderer
 {
 public:
+	enum RENDERER
+	{
+		RENDERER_CPU,
+		RENDERER_CUDA,
+		RENDERER_N
+	};
 	RTRenderer();
 	~RTRenderer();
 	bool Init(const unsigned int width, const unsigned int height);
@@ -86,6 +92,7 @@ public:
 
 	inline const float* GetResult() { return m_pResult; }
 protected:
+	RENDERER m_renderer;
 	RTScene* m_pScene;
 	float* m_pResult;
 	unsigned int m_uSizeW;
