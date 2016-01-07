@@ -68,7 +68,7 @@ struct CURay
 };
 
 __global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
-	float width, float height, uint bvhNodeN, float* result)
+	float width, float height, float* result)
 {
 	uint x = blockIdx.x * blockDim.x + threadIdx.x;
 	uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -255,7 +255,7 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 	// Kernel go here
 	dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 	dim3 grid(width / block.x, height / block.y, 1);
-	pt0_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, width, height, scene->GetCompactBVH()->nodeN, g_devResultData);
+	pt0_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, width, height, g_devResultData);
 
 	// Copy result to host
 	cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
