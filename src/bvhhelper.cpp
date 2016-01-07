@@ -1,4 +1,5 @@
 #include "bvhhelper.h"
+#include "macrohelper.h"
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
@@ -45,7 +46,7 @@ namespace NPBVHHelper
 	}
 
 	void InitialBVHNode(BVHNode* node
-		, BVHTriangle* bvhTris, uint32* reorderedTriOrder, uint32 triStart, uint32 triN)
+		, BVHTriangle* bvhTris, uint32* reorderedTriOrder, uint32 triStart, uint32 triN, uint32 depthBudget)
 	{
 		if (triN <= 0) 
 			return;
@@ -58,14 +59,14 @@ namespace NPBVHHelper
 			centroidBound = centroidBound.merge(bvhTris[ind].centroid);
 		}
 		//std::cout << "==node==" << std::endl;
-		//for (uint32 i = 0; i != 32; i++)
+		//for (uint32 i = 0; i != 24; i++)
 		//	std::cout << reorderedTriOrder[i] << " ";
 		//std::cout << std::endl;
 
 		NPMathHelper::Vec3 boundDia = centroidBound.maxPoint - centroidBound.minPoint;
 		if (boundDia._x < 0 || boundDia._y < 0 || boundDia._z < 0)
 			return;
-		if (triN == 1 || boundDia.length() < M_EPSILON)
+		if (triN == 1 || depthBudget <= 1 || boundDia.length() < M_EPSILON)
 			return InitialBVHLeafNode(node, triStart, triN);
 
 		// choose split axis
@@ -181,7 +182,7 @@ namespace NPBVHHelper
 
 
 			//std::cout << "==reordered split at" << binSplit << "==" << std::endl;
-			//for (uint32 i = 0; i != 32; i++)
+			//for (uint32 i = 0; i != 24; i++)
 			//{
 			//	if (triStart == i)
 			//		std::cout << "[";
@@ -199,13 +200,14 @@ namespace NPBVHHelper
 		BVHNode* rightNode = new BVHNode();
 		node->childNodes[0] = leftNode;
 		node->childNodes[1] = rightNode;
-		InitialBVHNode(leftNode, bvhTris, reorderedTriOrder, triStart, mid - triStart + 1);
-		InitialBVHNode(rightNode, bvhTris, reorderedTriOrder, mid - triStart + 1, triN - (mid - triStart + 1));
+		InitialBVHNode(leftNode, bvhTris, reorderedTriOrder, triStart, mid - triStart + 1, depthBudget-1);
+		InitialBVHNode(rightNode, bvhTris, reorderedTriOrder, mid + 1, triN - (mid - triStart + 1), depthBudget-1);
+		node->desN = 2 + leftNode->desN + rightNode->desN;
 		return;
 
 	}
 
-	std::vector<uint32> CreateBVH(BVHNode* root, const std::vector<uint32> &tri, const std::vector<NPMathHelper::Vec3> &vert)
+	std::vector<uint32> CreateBVH(BVHNode* root, const std::vector<uint32> &tri, const std::vector<NPMathHelper::Vec3> &vert, uint32 maxDepth)
 	{
 		if (tri.size() == 0 || !root)
 			return std::vector<uint32>();
@@ -231,7 +233,7 @@ namespace NPBVHHelper
 		}
 
 		// Our journey start here!
-		InitialBVHNode(root, rawBVHTris, rawReorderedTriOrder, 0, triSize);
+		InitialBVHNode(root, rawBVHTris, rawReorderedTriOrder, 0, triSize, maxDepth);
 		// Ok its done guys!
 
 		std::vector<uint32> reorderedTriOrder(triSize);
@@ -249,5 +251,35 @@ namespace NPBVHHelper
 		delete[] rawBVHTris; rawBVHTris = nullptr;
 
 		return reorderedTriOrder;
+	}
+
+	uint32 InitialCompactBVHOnNode(const BVHNode* node, CompactBVH* compact, uint32 curInd)
+	{
+		compact->bounds[curInd] = node->bound;
+		if (!node->childNodes[0] || !node->childNodes[1])
+		{
+			compact->offOrTSTN[curInd * 2] = node->triStart;
+			compact->offOrTSTN[curInd * 2 + 1] = node->triN;
+			return 1;
+		}
+		compact->offOrTSTN[curInd * 2 + 1] = 0;
+		uint32 firstChildDes = InitialCompactBVHOnNode(node->childNodes[0], compact, curInd + 1);
+		compact->offOrTSTN[curInd * 2] = firstChildDes + 1;
+		return InitialCompactBVHOnNode(node->childNodes[1], compact, curInd + firstChildDes + 1) + firstChildDes + 1;
+	}
+
+	bool CompactBVH::InitialCompactBVH(const BVHNode* bvhRoot)
+	{
+		if (!bvhRoot) return false;
+		DELETE_ARRAY(bounds);
+		DELETE_ARRAY(offOrTSTN);
+		nodeN = bvhRoot->desN + 1;
+		if (nodeN <= 0) return false;
+
+		bounds = new NPRayHelper::AABBBox[nodeN];
+		offOrTSTN = new uint32[nodeN * 2];
+		if (InitialCompactBVHOnNode(bvhRoot, this, 0) == nodeN)
+			return true;
+		return false;
 	}
 }

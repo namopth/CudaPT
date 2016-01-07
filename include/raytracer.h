@@ -61,7 +61,9 @@ public:
 	std::vector<RTMaterial> m_pMaterials;
 protected:
 	std::vector<NPRayHelper::Sphere> m_vSpheres;
-	NPBVHHelper::BVHNode bvhRootNode;
+	NPBVHHelper::BVHNode m_bvhRootNode;
+	NPBVHHelper::CompactBVH m_compactBVH;
+	std::vector<NPMathHelper::Vec3> m_triIntersectData;
 
 };
 

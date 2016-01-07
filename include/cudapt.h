@@ -30,6 +30,7 @@ protected:
 	float m_fExposure;
 
 	NPCamHelper::FlyCamera m_cam;
+	bool m_bIsMRBHeld;
 	bool m_bIsCamRotate;
 	NPMathHelper::Vec3 m_v3CamMoveDir;
 	float m_fCamSenX, m_fCamSenY;

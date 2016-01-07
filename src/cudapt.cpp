@@ -104,11 +104,12 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");
 	// Camera control - bgn
 	NPMathHelper::Vec2 cursorMoved = m_v2CurrentCursorPos - m_v2LastCursorPos;
-	if (m_bIsCamRotate)
+	if (m_bIsCamRotate && m_bIsMRBHeld)
 	{
 		m_cam.AddPitch(-cursorMoved._x * m_fCamSenX);
 		m_cam.AddYaw(-cursorMoved._y * m_fCamSenY);
 	}
+	m_bIsCamRotate = m_bIsMRBHeld;
 	m_v2LastCursorPos = m_v2CurrentCursorPos;
 	// Camera control - end
 
@@ -192,9 +193,11 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 		break;
 	case Window::INPUTMSG_MOUSEKEY:
 		if (TwEventMouseButtonGLFW(msg.key, msg.action))
-			break;
+		{
+			if (msg.key != GLFW_MOUSE_BUTTON_RIGHT || !m_bIsMRBHeld) break;
+		}
 		if (msg.key == GLFW_MOUSE_BUTTON_RIGHT)
-			m_bIsCamRotate = (msg.action == GLFW_PRESS);
+			m_bIsMRBHeld = (msg.action == GLFW_PRESS);
 		break;
 	case Window::INPUTMSG_MOUSECURSOR:
 		TwEventMousePosGLFW(msg.xpos, msg.ypos);

@@ -86,8 +86,8 @@ namespace NPRayHelper
 			NPMathHelper::Vec3 real_max = vecmax(tmin, tmax);
 			float minmax = std::min(std::min(real_max._x, real_max._y), real_max._z);
 			float maxmin = std::max(std::max(real_min._x, real_min._y), real_min._z);
-			if (minmax >= maxmin && maxmin > M_EPSILON)
-				return maxmin;
+			if (minmax >= maxmin/* && maxmin > M_EPSILON*/)
+				return (maxmin > M_EPSILON) ? maxmin : 0;
 			return M_MIN_INF;
 		}
 

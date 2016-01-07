@@ -37,36 +37,52 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 		}
 	}
 
-	NPRayHelper::Tri test = NPRayHelper::Tri(NPMathHelper::Vec3(0.f, 0.f, -2.f)
-		, NPMathHelper::Vec3(0.f, 2.f, -2.f), NPMathHelper::Vec3(-2.f, 0.f, -2.f));
-
-	NPMathHelper::Vec3 pos, norm;
-	float w, u, v;
-	if (test.intersect(r, pos, norm, w, u, v))
+	if (m_compactBVH.IsValid())
 	{
-		float dist = (pos - r.origPoint).length();
-		if (dist < minIntersect)
+		uint32 traceCmd[128];
+		traceCmd[0] = 0;
+		int32 traceCmdPointer = 0;
+		while (traceCmdPointer >= 0)
 		{
-			minIntersect = dist;
-			result.hitPosition = pos;
-			result.hitNormal = NPMathHelper::Vec3(w, u, v);
-			result.objId = 0;
-			result.objType = OBJ_SPHERE;
-		}
-	}
+			uint32 curInd = traceCmd[traceCmdPointer--];
+			float min = m_compactBVH.bounds[curInd].intersect(r);
+			if (min >= 0 && min < minIntersect)
+			{
+				if (m_compactBVH.offOrTSTN[curInd * 2 + 1] == 0)
+				{
+					if (traceCmdPointer < 127)
+						traceCmd[++traceCmdPointer] = curInd + 1;
+					if (traceCmdPointer < 127)
+						traceCmd[++traceCmdPointer] = curInd + m_compactBVH.offOrTSTN[curInd * 2];
+				}
+				else
+				{
+					uint32 triStart = m_compactBVH.offOrTSTN[curInd * 2];
+					uint32 triN = m_compactBVH.offOrTSTN[curInd * 2 + 1];
+					for (uint32 i = triStart; i < triStart + triN; i++)
+					{
+						NPRayHelper::Tri tri;
+						tri.p0 = m_triIntersectData[i * 3];
+						tri.p1 = m_triIntersectData[i * 3 + 1];
+						tri.p2 = m_triIntersectData[i * 3 + 2];
 
-	NPRayHelper::AABBBox test2 = NPRayHelper::AABBBox(NPMathHelper::Vec3(0.f, -4.f, 0.f)
-		, NPMathHelper::Vec3(2.f, -2.f, 2.f));
-	if (test2.intersect(r, pos, norm))
-	{
-		float dist = (pos - r.origPoint).length();
-		if (dist < minIntersect)
-		{
-			minIntersect = dist;
-			result.hitPosition = pos;
-			result.hitNormal = norm;
-			result.objId = 0;
-			result.objType = OBJ_SPHERE;
+						NPMathHelper::Vec3 pos, norm;
+						float w, u, v;
+						if (tri.intersect(r, pos, norm, w, u, v))
+						{
+							float dist = (pos - r.origPoint).length();
+							if (dist < minIntersect)
+							{
+								minIntersect = dist;
+								result.hitPosition = pos;
+								result.hitNormal = NPMathHelper::Vec3(w, u, v);
+								result.objId = 0;
+								result.objType = OBJ_SPHERE;
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -156,10 +172,20 @@ bool RTScene::AddModel(const char* filename)
 	{
 		verts.push_back(vert.pos);
 	}
-	bvhRootNode.Clear();
-	std::vector<uint32> reorderedTriOrder = NPBVHHelper::CreateBVH(&bvhRootNode, tris, verts);
-
-	return true;
+	m_bvhRootNode.Clear();
+	std::vector<uint32> reorderedTriOrder = NPBVHHelper::CreateBVH(&m_bvhRootNode, tris, verts);
+	std::vector<RTTriangle> tempTriOrder(reorderedTriOrder.size());
+	m_triIntersectData.clear();
+	m_triIntersectData.resize(reorderedTriOrder.size()*3);
+	for (uint32 i = 0; i < reorderedTriOrder.size(); i++)
+	{
+		tempTriOrder[i] = m_pTriangles[reorderedTriOrder[i]];
+		m_triIntersectData[i * 3] = m_pVertices[tempTriOrder[i].vertInd0].pos;
+		m_triIntersectData[i * 3 + 1] = m_pVertices[tempTriOrder[i].vertInd1].pos;
+		m_triIntersectData[i * 3 + 2] = m_pVertices[tempTriOrder[i].vertInd2].pos;
+	}
+	m_pTriangles = tempTriOrder;
+	return m_compactBVH.InitialCompactBVH(&m_bvhRootNode);
 }
 
 RTRenderer::RTRenderer()
@@ -219,8 +245,6 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 				unsigned int ind = (i + j * m_uSizeW) * 3.f;
 				float u = (2.f * ((float)i + 0.5f) / (float)m_uSizeW - 1.f) * tan(fov * 0.5f) * (float)m_uSizeW / (float)m_uSizeH;
 				float v = (2.f * ((float)j + 0.5f) / (float)m_uSizeH - 1.f) * tan(fov * 0.5f);
-				//float u = 2.f * ((float)i - 0.5f * m_uSizeW + 0.5f) / m_uSizeW * tan(fov * 0.5f);
-				//float v = 2.f * ((float)j - 0.5f * m_uSizeH + 0.5f) / m_uSizeH * tan(fov * 0.5f) / (float)m_uSizeW * (float)m_uSizeH;
 				NPMathHelper::Vec3 dir = (camRight * u + camUp * v + camDir).normalize();
 				NPRayHelper::Ray ray(camPos, dir);
 
