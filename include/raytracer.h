@@ -48,8 +48,13 @@ public:
 		unsigned int objId;
 		unsigned int subObjId;
 	};
-	RTScene()
+	RTScene() : m_bIsCudaDirty(true)
 	{}
+
+	inline const NPBVHHelper::CompactBVH* GetCompactBVH() const { return &m_compactBVH; }
+	inline const std::vector<NPMathHelper::Vec3>* GetTriIntersectData() const { return &m_triIntersectData; }
+	inline bool GetIsCudaDirty() const { return m_bIsCudaDirty; }
+	inline void SetIsCudaDirty(bool dirty = false) { m_bIsCudaDirty = dirty; }
 
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
 
@@ -64,7 +69,7 @@ protected:
 	NPBVHHelper::BVHNode m_bvhRootNode;
 	NPBVHHelper::CompactBVH m_compactBVH;
 	std::vector<NPMathHelper::Vec3> m_triIntersectData;
-
+	bool m_bIsCudaDirty;
 };
 
 class RTRenderer

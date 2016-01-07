@@ -173,6 +173,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   <ItemGroup>
     <CudaCompile Include="..\src\cudarayhelper.cu" />
     <CudaCompile Include="..\src\cudaRayTracer.cu" />
+    <CudaCompile Include="..\src\cudaRayTracer0.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

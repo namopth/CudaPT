@@ -3,10 +3,48 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
+#include <iostream>
 
 #define __hd__ __host__ __device__
 #define M_EPSILON	1E-9
 #define M_INF		1E20
+
+#if defined(_DEBUG)
+#   define NEW  new//new(_NORMAL_BLOCK,__FILE__, __LINE__)
+#else
+#	define NEW  new
+#endif
+
+#if !defined(DEL)
+#define DEL(x) if(x) delete x; x=NULL;
+#endif
+
+#if !defined(DEL_SIZE)
+#define DEL_SIZE(x,y) if(x) delete(x,y); x=NULL;
+#endif
+
+#if !defined(DEL_ARRAY)
+#define DEL_ARRAY(x) if (x) delete [] x; x=NULL; 
+#endif
+
+#if !defined(REL)
+#define REL(x) if(x) x->Release(); x=NULL;
+#endif
+
+#if !defined(CUFREE)
+#define CUFREE(x) if(x) cudaFree(x);
+#endif
+
+static void HandleError(cudaError_t err,
+	const char *file,
+	int line) {
+	if (err != cudaSuccess) {
+		printf("%s in %s at line %d\n", cudaGetErrorString(err),
+			file, line);
+		exit(EXIT_FAILURE);
+	}
+}
+#define HANDLE_ERROR( err ) (HandleError( err, __FILE__, __LINE__ ))
 
 #ifndef __CUDA_ARCH__
 #include <vector>
