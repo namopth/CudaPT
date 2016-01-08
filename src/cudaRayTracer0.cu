@@ -5,7 +5,10 @@
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_range.h>
 
-#define BLOCK_SIZE 32
+#include <curand_kernel.h>
+
+#define BLOCK_SIZE 16
+#define BVH_DEPTH_MAX 128
 
 texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
@@ -31,12 +34,13 @@ struct CURay
 		dir.x = escapeZero(dir.x, M_EPSILON);
 		dir.y = escapeZero(dir.y, M_EPSILON);
 		dir.z = escapeZero(dir.z, M_EPSILON);
-		float3 tmin = (_min - orig) / modDir;
-		float3 tmax = (_max - orig) / modDir;
+		modDir = vecRcp(modDir);
+		float3 tmin = vecMul((_min - orig), modDir);
+		float3 tmax = vecMul((_max - orig), modDir);
 		float3 real_min = vecMin(tmin, tmax);
 		float3 real_max = vecMax(tmin, tmax);
-		float minmax = min(min(real_max.x, real_max.y), real_max.z);
-		float maxmin = max(max(real_min.x, real_min.y), real_min.z);
+		float minmax = fminf(fminf(real_max.x, real_max.y), real_max.z);
+		float maxmin = fmaxf(fmaxf(real_min.x, real_min.y), real_min.z);
 		if (minmax >= maxmin)
 			return (maxmin > M_EPSILON) ? maxmin : 0;
 		return M_INF;
@@ -51,15 +55,16 @@ struct CURay
 		float divisor = vecDot(de2, _e0);
 		if (fabs(divisor) < M_EPSILON)
 			return M_INF;
+		divisor = rcpf(divisor);
 		float3 t = orig - _p0;
 		float3 te1 = vecCross(t, _e0);
-		float rT = vecDot(te1, _e1) / divisor;
+		float rT = vecDot(te1, _e1) * divisor;
 		if (rT < 0.f)
 			return M_INF;
-		u = vecDot(de2, t) / divisor;
+		u = vecDot(de2, t) * divisor;
 		if (u < 0.f || u > 1.f)
 			return M_INF;
-		v = vecDot(te1, dir) / divisor;
+		v = vecDot(te1, dir) * divisor;
 		if (v < 0.f || (u + v) > 1.f)
 			return M_INF;
 		w = 1 - u - v;
@@ -84,7 +89,7 @@ __global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 ca
 		float minIntersect = M_INF;
 		uint32 tracedTriId = 0;
 		float w, u, v;
-		uint32 traceCmd[128];
+		uint32 traceCmd[BVH_DEPTH_MAX];
 		traceCmd[0] = 0;
 		int32 traceCmdPointer = 0;
 		while (traceCmdPointer >= 0)
@@ -100,7 +105,7 @@ __global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 ca
 				uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
 				if (tN.x == 0)
 				{
-					if (traceCmdPointer < 126)
+					if (traceCmdPointer < BVH_DEPTH_MAX - 2)
 					{
 						traceCmd[++traceCmdPointer] = curInd + 1;
 						traceCmd[++traceCmdPointer] = curInd + offOrTs.x;

@@ -25,6 +25,8 @@
 #define M_INF		1E20
 #define M_MIN_INF	-1E20
 
+#define USE_CUDA_INTRINSIC
+
 #if defined(_DEBUG)
 #   define NEW  new//new(_NORMAL_BLOCK,__FILE__, __LINE__)
 #else
@@ -107,41 +109,90 @@ inline __hd__ float escapeZero(const float value, const float epsilon)
 	return result;
 }
 
+inline __hd__ float rcpf(float x)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return __frcp_rn(x);
+#else
+	return 1.f / x;
+#endif
+}
+
 // float3 - bgn
 inline __hd__ float3 vecMin(const float3& lhs, const float3& rhs)
 {
-	return make_float3(min(lhs.x, rhs.x), min(lhs.y, rhs.y), min(lhs.z, rhs.z));
+	return make_float3(fminf(lhs.x, rhs.x), fminf(lhs.y, rhs.y), fminf(lhs.z, rhs.z));
 }
 
 inline __hd__ float3 vecMax(const float3& lhs, const float3& rhs)
 {
-	return make_float3(max(lhs.x, rhs.x), max(lhs.y, rhs.y), max(lhs.z, rhs.z));
+	return make_float3(fmaxf(lhs.x, rhs.x), fmaxf(lhs.y, rhs.y), fmaxf(lhs.z, rhs.z));
+}
+
+inline __hd__ float3 vecMul(const float3& lhs, const float3& rhs)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fmul_rn(lhs.x, rhs.x), __fmul_rn(lhs.y, rhs.y), __fmul_rn(lhs.z, rhs.z));
+#else
+	return make_float3(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z);
+#endif
+}
+
+inline __hd__ float3 vecRcp(const float3& lhs)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__frcp_rn(lhs.x), __frcp_rn(lhs.y), __frcp_rn(lhs.z));
+#else
+	return make_float3(1.f / lhs.x, 1.f / lhs.y, 1.f / lhs.z);
+#endif
 }
 
 inline __hd__ float3 vecCross(const float3& lhs, const float3& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fmaf_rn(lhs.y, rhs.z, -__fmul_rn(lhs.z, rhs.y))
+		, __fmaf_rn(lhs.z, rhs.x, -__fmul_rn(lhs.x, rhs.z))
+		, __fmaf_rn(lhs.x, rhs.y, -__fmul_rn(lhs.y, rhs.x)));
+#else
 	return make_float3(lhs.y*rhs.z - lhs.z * rhs.y,
 		lhs.z * rhs.x - lhs.x * rhs.z, lhs.x * rhs.y - lhs.y * rhs.x);
+#endif
 }
 
 inline __hd__ float vecDot(const float3& lhs, const float3 &rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return __fmaf_rn(lhs.x,rhs.x,__fmaf_rn(lhs.y,rhs.y,__fmul_rn(lhs.z,rhs.z)));
+#else
 	return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+#endif
 }
 
 inline __hd__ float3 operator+(const float3& lhs, const float3& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fadd_rn(lhs.x,rhs.x), __fadd_rn(lhs.y,rhs.y), __fadd_rn(lhs.z,rhs.z));
+#else
 	return make_float3(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z);
+#endif
 }
 
 inline __hd__ float3 operator-(const float3& lhs, const float3& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fsub_rn(lhs.x,rhs.x), __fsub_rn(lhs.y,rhs.y), __fsub_rn(lhs.z,rhs.z));
+#else
 	return make_float3(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
+#endif
 }
 
 inline __hd__ float3 operator*(const float3& lhs, const float& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fmul_rn(lhs.x, rhs), __fmul_rn(lhs.y, rhs), __fmul_rn(lhs.z, rhs));
+#else
 	return make_float3(lhs.x*rhs, lhs.y*rhs, lhs.z*rhs);
+#endif
 }
 
 inline __hd__ float3 operator*(const float& lhs, const float3& rhs)
@@ -151,17 +202,29 @@ inline __hd__ float3 operator*(const float& lhs, const float3& rhs)
 
 inline __hd__ float3 operator/(const float3& lhs, const float3& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fdiv_rn(lhs.x, rhs.x), __fdiv_rn(lhs.y, rhs.y), __fdiv_rn(lhs.z, rhs.z));
+#else
 	return make_float3(lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z);
+#endif
 }
 
 inline __hd__ float3 operator/(const float3& lhs, const float& rhs)
 {
-	return make_float3(lhs.x/rhs, lhs.y/rhs, lhs.z/rhs);
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fdiv_rn(lhs.x, rhs), __fdiv_rn(lhs.y, rhs), __fdiv_rn(lhs.z, rhs));
+#else
+	return make_float3(lhs.x / rhs, lhs.y / rhs, lhs.z / rhs);
+#endif
 }
 
 inline __hd__ float3 operator/(const float& lhs, const float3& rhs)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float3(__fdiv_rn(lhs,rhs.x), __fdiv_rn(lhs,rhs.y), __fdiv_rn(lhs,rhs.z));
+#else
 	return make_float3(lhs/rhs.x, lhs/rhs.y, lhs/rhs.z);
+#endif
 }
 
 inline __hd__ float operator*(const float3& lhs, const float3& rhs)
@@ -176,12 +239,20 @@ inline __hd__ float3 operator%(const float3& lhs, const float3& rhs)
 
 inline __hd__ float length(const float3& a)
 {
-	return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return __fsqrt_rd(a.x * a.x + a.y * a.y + a.z * a.z);
+#else
+	return sqrtf(a.x * a.x + a.y * a.y + a.z * a.z);
+#endif
 }
 
 inline __hd__ float3 normalize(const float3& a)
 {
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return a * __fsqrt_rd(a.x * a.x + a.y * a.y + a.z * a.z);
+#else
 	return a / length(a);
+#endif
 }
 // float3 - end
 

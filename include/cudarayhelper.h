@@ -21,7 +21,7 @@ namespace NPCudaRayHelper
 		float3 center;
 		float radius;
 		__hd__ Sphere(const float3 c, const float r) : center(c), radius(r) {}
-		__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
+		__device__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
 		{
 			float3 co = r.orig - center;
 			float a = r.dir*r.dir;
@@ -53,7 +53,7 @@ namespace NPCudaRayHelper
 			:minPoint(min), maxPoint(max)
 		{}
 
-		__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
+		__device__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal)
 		{
 			float3 modDir = r.dir;
 			modDir.x = escapeZero(modDir.x, M_EPSILON);
@@ -118,7 +118,7 @@ namespace NPCudaRayHelper
 
 		}
 
-		__hd__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal, float &w, float &u, float &v)
+		__device__ bool intersect(const Ray &r, float3 &hitPoint, float3 &hitNormal, float &w, float &u, float &v)
 		{
 			float3 e1 = p1 - p0;
 			float3 e2 = p2 - p0;
@@ -142,12 +142,12 @@ namespace NPCudaRayHelper
 			return true;
 		}
 
-		__hd__ float3 getInterpolatedNormal(float w, float u, float v)
+		__device__ float3 getInterpolatedNormal(float w, float u, float v)
 		{
 			return normalize(n0 * w + n1 * u + n2 * v);
 		}
 
-		__hd__ float2 getInterpolatedUV(float w, float u, float v)
+		__device__ float2 getInterpolatedUV(float w, float u, float v)
 		{
 			return normalize(uv0 * w + uv1 * u + uv2 * v);
 		}
