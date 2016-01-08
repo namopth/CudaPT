@@ -69,9 +69,6 @@
     <ClInclude Include="..\include\cudahelper.h">
       <Filter>Cuda Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\cudarayhelper.h">
-      <Filter>Cuda Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\bvhhelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -118,12 +115,6 @@
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="..\src\cudaRayTracer.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudarayhelper.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRayTracer0.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
   </ItemGroup>

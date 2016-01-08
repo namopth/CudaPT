@@ -132,14 +132,12 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	else
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	//Rendering...
+
 	const float* traceResult = nullptr;
 	if (m_bIsTracing)
 	{
 		m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
 			, m_cam.GetUp(), M_PI_2 * 0.5f, m_scene);
-		//m_raytracer.Render2(m_cam.GetPos(), m_cam.GetDir()
-			//, m_cam.GetUp(), M_PI_2 * 0.5f, m_cudaScene);
 		traceResult = m_raytracer.GetResult();
 	}
 
@@ -216,7 +214,6 @@ void CUDAPTWindow::BrowseModel()
 	if (file.empty())
 		return;
 	if (!m_scene.AddModel(file.c_str())){
-	//if (!m_cudaScene.AddObjModel(file.c_str())){
 		std::string message = "Cannot load file ";
 		message = message + file;
 		NPOSHelper::CreateMessageBox(message.c_str(), "Load Model Data Failure", NPOSHelper::MSGBOX_OK);
