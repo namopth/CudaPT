@@ -6,7 +6,6 @@
 #include "mathhelper.h"
 #include "macrohelper.h"
 #include "raytracer.h"
-#include "cudarayhelper.h"
 
 class CUDAPTWindow : public NPGLHelper::Window
 {
@@ -37,8 +36,9 @@ protected:
 	float m_fCamMoveSpeed;
 	RTScene m_scene;
 	RTRenderer m_raytracer;
-	NPCudaRayHelper::Scene m_cudaScene;
 
+	uint32 m_uDeltaTimeSec;
+	float m_fFPS;
 	bool m_bIsTracing;
 	bool m_bIsWireFrame;
 	bool m_bIsSceneGUI;

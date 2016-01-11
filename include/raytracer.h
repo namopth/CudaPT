@@ -3,7 +3,6 @@
 
 #include "mathhelper.h"
 #include "rayhelper.h"
-#include "cudarayhelper.h"
 #include "bvhhelper.h"
 
 #include <vector>
@@ -85,13 +84,11 @@ public:
 	~RTRenderer();
 	bool Init(const unsigned int width, const unsigned int height);
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
-	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
-	bool RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
-	bool Render2(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov
-		, NPCudaRayHelper::Scene &scene);
-
 	inline const float* GetResult() { return m_pResult; }
 protected:
+	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
+	bool RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
+
 	RENDERER m_renderer;
 	RTScene* m_pScene;
 	float* m_pResult;
