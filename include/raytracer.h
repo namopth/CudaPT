@@ -84,7 +84,6 @@ public:
 	~RTRenderer();
 	bool Init(const unsigned int width, const unsigned int height);
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
-
 	inline const float* GetResult() { return m_pResult; }
 protected:
 	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);

@@ -37,6 +37,8 @@ protected:
 	RTScene m_scene;
 	RTRenderer m_raytracer;
 
+	uint32 m_uDeltaTimeSec;
+	float m_fFPS;
 	bool m_bIsTracing;
 	bool m_bIsWireFrame;
 	bool m_bIsSceneGUI;

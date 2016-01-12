@@ -8,7 +8,6 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
-
 #include "cudahelper.h"
 
 bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScene* scene
@@ -88,7 +87,7 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 	return (minIntersect < M_INF);
 }
 
-__host__ void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
+void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
 {
 	for (uint i = 0; i < node->mNumMeshes; i++)
 	{

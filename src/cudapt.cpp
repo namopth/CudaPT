@@ -36,6 +36,8 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_fCamSenX(0.01f)
 	, m_fCamSenY(.005f)
 	, m_fCamMoveSpeed(20.0f)
+	, m_uDeltaTimeSec(0)
+	, m_fFPS(0.f)
 {
 
 }
@@ -76,6 +78,10 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwDefine(" CUDAPT help='These properties defines the application behavior' "));
 	ATB_ASSERT(TwAddVarRW(mainBar, "Tracer_Enabled", TW_TYPE_BOOLCPP, &m_bIsTracing, "group='Tracer' label='Enable'"));
 	ATB_ASSERT(TwAddButton(mainBar, "addmodel", TWBrowseModel, this, "label='Add Model' group='Scene'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "Frame Time", TW_TYPE_UINT32, &m_uDeltaTimeSec,
+		" label='Time(ms)' group='Render Info' refresh=1.0"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "Frame FPS", TW_TYPE_FLOAT, &m_fFPS,
+		" label='FPS' group='Render Info' refresh=1.0"));
 
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())
@@ -102,6 +108,9 @@ int CUDAPTWindow::OnInit()
 int CUDAPTWindow::OnTick(const float deltaTime)
 {
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");
+	m_uDeltaTimeSec = (uint32)(deltaTime * 1000.f);
+	m_fFPS = (deltaTime > M_EPSILON) ? 1.f / deltaTime : 0.f;
+
 	// Camera control - bgn
 	NPMathHelper::Vec2 cursorMoved = m_v2CurrentCursorPos - m_v2LastCursorPos;
 	if (m_bIsCamRotate && m_bIsMRBHeld)
