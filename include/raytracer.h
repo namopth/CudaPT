@@ -25,7 +25,26 @@ struct RTTriangle
 
 struct RTMaterial
 {
+	NPMathHelper::Vec3 diffuse;
+	NPMathHelper::Vec3 ambient;
+	NPMathHelper::Vec3 specular;
+	NPMathHelper::Vec3 emissive;
+	float opacity;
+	int32 diffuseTexId;
+	int32 specularTexId;
+	int32 emissiveTexId;
 
+	RTMaterial() {}
+};
+
+struct RTTexture
+{
+	std::string name;
+	float* data;
+	uint32 width;
+	uint32 height;
+
+	RTTexture() : name(), data(0), width(0), height(0) {}
 };
 
 class RTScene
@@ -35,7 +54,7 @@ public:
 	{
 		OBJ_SPHERE = 0,
 		OBJ_BOX = 1,
-		OBJ_MESH = 2,
+		OBJ_TRI = 2,
 		OBJ_N
 	};
 
@@ -63,6 +82,7 @@ public:
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;
 	std::vector<RTMaterial> m_pMaterials;
+	std::vector<RTTexture> m_pTextures;
 protected:
 	std::vector<NPRayHelper::Sphere> m_vSpheres;
 	NPBVHHelper::BVHNode m_bvhRootNode;

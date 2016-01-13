@@ -79,9 +79,9 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddVarRW(mainBar, "Tracer_Enabled", TW_TYPE_BOOLCPP, &m_bIsTracing, "group='Tracer' label='Enable'"));
 	ATB_ASSERT(TwAddButton(mainBar, "addmodel", TWBrowseModel, this, "label='Add Model' group='Scene'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "Frame Time", TW_TYPE_UINT32, &m_uDeltaTimeSec,
-		" label='Time(ms)' group='Render Info' refresh=1.0"));
+		" label='Time(ms)' group='Render Info'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "Frame FPS", TW_TYPE_FLOAT, &m_fFPS,
-		" label='FPS' group='Render Info' refresh=1.0"));
+		" label='FPS' group='Render Info'"));
 
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())

@@ -8,6 +8,9 @@
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
+
+#include <SOIL.h>
+
 #include "cudahelper.h"
 
 bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScene* scene
@@ -17,23 +20,23 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 {
 	float minIntersect = M_INF;
-	for (int i = 0; i < m_vSpheres.size(); i++)
-	{
-		NPRayHelper::Sphere sphere = m_vSpheres[i];
-		NPMathHelper::Vec3 pos, norm;
-		if (sphere.intersect(r, pos, norm))
-		{
-			float dist = (pos - r.origPoint).length();
-			if (dist < minIntersect)
-			{
-				minIntersect = dist;
-				result.hitPosition = pos;
-				result.hitNormal = norm;
-				result.objId = i;
-				result.objType = OBJ_SPHERE;
-			}
-		}
-	}
+	//for (int i = 0; i < m_vSpheres.size(); i++)
+	//{
+	//	NPRayHelper::Sphere sphere = m_vSpheres[i];
+	//	NPMathHelper::Vec3 pos, norm;
+	//	if (sphere.intersect(r, pos, norm))
+	//	{
+	//		float dist = (pos - r.origPoint).length();
+	//		if (dist < minIntersect)
+	//		{
+	//			minIntersect = dist;
+	//			result.hitPosition = pos;
+	//			result.hitNormal = norm;
+	//			result.objId = i;
+	//			result.objType = OBJ_SPHERE;
+	//		}
+	//	}
+	//}
 
 	if (m_compactBVH.IsValid())
 	{
@@ -74,8 +77,8 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 								minIntersect = dist;
 								result.hitPosition = pos;
 								result.hitNormal = NPMathHelper::Vec3(w, u, v);
-								result.objId = 0;
-								result.objType = OBJ_SPHERE;
+								result.objId = i;
+								result.objType = OBJ_TRI;
 							}
 						}
 					}
@@ -123,6 +126,7 @@ void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
 		{
 			aiFace face = mesh->mFaces[j];
 			RTTriangle tri;
+			tri.matInd = mesh->mMaterialIndex;
 			for (uint k = 0; k < face.mNumIndices; k++)
 			{
 				uint ind = k % 3;
@@ -145,6 +149,86 @@ void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
 	}
 }
 
+bool LoadTexture(RTTexture &texture)
+{
+	int width, height;
+	unsigned char* image = SOIL_load_image(texture.name.c_str(), &width, &height, 0, SOIL_LOAD_RGB);
+	if (!image || width <= 0 || height <= 0)
+		return false;
+	if (texture.data)
+		delete[] texture.data;
+	texture.height = height;
+	texture.width = width;
+	texture.data = new float[width * height * 4];
+	for (uint i = 0; i < width * height; i++)
+	{
+		texture.data[i * 4] = (float)image[i * 3] / 255.f;
+		texture.data[i * 4 + 1] = (float)image[i * 3 + 1] / 255.f;
+		texture.data[i * 4 + 2] = (float)image[i * 3 + 2] / 255.f;
+		texture.data[i * 4 + 3] = 1.f;
+	}
+	return true;
+}
+
+int32 GetTextureIndex(RTScene* mainScene, const std::string &name)
+{
+	for (uint32 i = 0; i < mainScene->m_pTextures.size(); i++)
+	{
+		if (name.compare(mainScene->m_pTextures[i].name) == 0)
+			return i;
+	}
+
+	RTTexture addTex;
+	addTex.name = name;
+	if (LoadTexture(addTex))
+	{
+		mainScene->m_pTextures.push_back(addTex);
+		return mainScene->m_pTextures.size() - 1;
+	}
+
+	return -1;
+}
+
+int32 AssimpLoadTexture(RTScene* mainScene, const aiMaterial* mat, const std::string& dir, aiTextureType type)
+{
+	if (mat->GetTextureCount(type) > 0)
+	{
+		aiString str;
+		mat->GetTexture(type, 0, &str);
+		std::string texPath = dir + "\\" + str.C_Str();
+		return GetTextureIndex(mainScene, texPath);
+	}
+	return -1;
+}
+
+
+void AssimpProcessSceneMaterial(RTScene* mainScene, const aiScene* scene, std::string& dir)
+{
+	uint32 curMatN = mainScene->m_pMaterials.size();
+	for (uint i = 0; i < scene->mNumMaterials; i++)
+	{
+		RTMaterial ourMat;
+		aiMaterial* material = scene->mMaterials[i];
+		aiColor3D aiColor(0.f, 0.f, 0.f);
+		float aiFloat;
+		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, aiColor))
+			ourMat.diffuse = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
+		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_SPECULAR, aiColor))
+			ourMat.specular = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
+		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_AMBIENT, aiColor))
+			ourMat.ambient = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
+		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, aiColor))
+			ourMat.emissive = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
+		if (AI_SUCCESS == material->Get(AI_MATKEY_OPACITY, aiFloat))
+			ourMat.opacity = aiFloat;
+		ourMat.diffuseTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_DIFFUSE);
+		ourMat.specularTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_SPECULAR);
+		ourMat.emissiveTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_EMISSIVE);
+
+		mainScene->m_pMaterials.push_back(ourMat);
+	}
+}
+
 bool RTScene::AddModel(const char* filename)
 {
 	Assimp::Importer importer;
@@ -157,6 +241,7 @@ bool RTScene::AddModel(const char* filename)
 	}
 	std::string dir = sPath.substr(0, sPath.find_last_of('\\'));
 	AssimpProcessNode(this, scene->mRootNode, scene);
+	AssimpProcessSceneMaterial(this, scene, dir);
 
 	std::vector<uint32> tris;
 	for (auto &tri : m_pTriangles)
@@ -190,7 +275,7 @@ bool RTScene::AddModel(const char* filename)
 RTRenderer::RTRenderer()
 	: m_pResult(0)
 	, m_pScene(0)
-	, m_renderer(RENDERER_CUDA)
+	, m_renderer(RENDERER_CPU)
 {
 
 }
@@ -259,9 +344,13 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 				RTScene::HitResult hitResult;
 				if (scene.Trace(ray, hitResult))
 				{
-					m_pResult[ind] = hitResult.hitNormal._x;
-					m_pResult[ind + 1] = hitResult.hitNormal._y;
-					m_pResult[ind + 2] = hitResult.hitNormal._z;
+					assert(hitResult.objId >= 0);
+					RTTriangle hitTri = scene.m_pTriangles[hitResult.objId];
+					assert(hitTri.matInd >= 0);
+					RTMaterial hitMat = scene.m_pMaterials[hitTri.matInd];
+					m_pResult[ind] = hitMat.diffuse._x;
+					m_pResult[ind + 1] = hitMat.diffuse._y;
+					m_pResult[ind + 2] = hitMat.diffuse._z;
 				}
 				else
 				{
