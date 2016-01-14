@@ -275,7 +275,7 @@ bool RTScene::AddModel(const char* filename)
 RTRenderer::RTRenderer()
 	: m_pResult(0)
 	, m_pScene(0)
-	, m_renderer(RENDERER_CPU)
+	, m_renderer(RENDERER_CUDA)
 {
 
 }

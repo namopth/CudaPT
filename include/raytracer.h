@@ -23,6 +23,14 @@ struct RTTriangle
 	uint32 matInd;
 };
 
+enum RTMAT_TYPE
+{
+	RTMAT_TYPE_DIFFUSE,
+	RTMAT_TYPE_SPECULAR,
+	RTMAT_TYPE_REFRACT,
+	RTMAT_TYPE_N
+};
+
 struct RTMaterial
 {
 	NPMathHelper::Vec3 diffuse;
@@ -33,8 +41,14 @@ struct RTMaterial
 	int32 diffuseTexId;
 	int32 specularTexId;
 	int32 emissiveTexId;
+	RTMAT_TYPE matType;
 
-	RTMaterial() {}
+	RTMaterial() 
+		: diffuse(), ambient(), specular(), emissive()
+		, opacity(1.0f)
+		, diffuseTexId(-1), specularTexId(-1), emissiveTexId(-1)
+		, matType(RTMAT_TYPE_DIFFUSE) 
+	{}
 };
 
 struct RTTexture
