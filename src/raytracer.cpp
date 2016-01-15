@@ -149,10 +149,10 @@ void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
 	}
 }
 
-bool LoadTexture(RTTexture &texture)
+bool LoadTexture(RTTexture &texture, const std::string &name)
 {
 	int width, height;
-	unsigned char* image = SOIL_load_image(texture.name.c_str(), &width, &height, 0, SOIL_LOAD_RGB);
+	unsigned char* image = SOIL_load_image(name.c_str(), &width, &height, 0, SOIL_LOAD_RGB);
 	if (!image || width <= 0 || height <= 0)
 		return false;
 	if (texture.data)
@@ -174,15 +174,14 @@ int32 GetTextureIndex(RTScene* mainScene, const std::string &name)
 {
 	for (uint32 i = 0; i < mainScene->m_pTextures.size(); i++)
 	{
-		if (name.compare(mainScene->m_pTextures[i].name) == 0)
+		if (name.compare(mainScene->m_pTextures[i].first) == 0)
 			return i;
 	}
 
 	RTTexture addTex;
-	addTex.name = name;
-	if (LoadTexture(addTex))
+	if (LoadTexture(addTex, name))
 	{
-		mainScene->m_pTextures.push_back(addTex);
+		mainScene->m_pTextures.push_back(std::make_pair(name,addTex));
 		return mainScene->m_pTextures.size() - 1;
 	}
 

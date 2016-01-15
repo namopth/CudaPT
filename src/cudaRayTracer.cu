@@ -13,10 +13,19 @@
 texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
 texture<float4, 1, cudaReadModeElementType> g_triIntersectionData;
-texture<float4, 1, cudaReadModeElementType>* g_sceneTexturesData;
 
-RTTexture* g_devTextures = nullptr;
-std::vector<float*> g_devTextureRaws; // to CUFREE on CPU Side
+struct CURTTexture
+{
+	cudaTextureObject_t texObj;
+	cudaArray* cuArray;
+	uint width;
+	uint height;
+	__hd__ CURTTexture() {}
+};
+CURTTexture* g_devTextures = nullptr;
+std::vector<CURTTexture> g_cuRTTextures; // to CUFREE on CPU Side
+
+RTVertex* g_devVertices = nullptr;
 RTTriangle* g_devTriangles = nullptr;
 RTMaterial* g_devMaterials = nullptr;
 float* g_devResultData = nullptr;
@@ -150,7 +159,7 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 }
 
 __global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
-	float width, float height, RTTriangle* triangles, RTMaterial* materials, RTTexture* textures
+	float width, float height, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
 	, float* result, float* accResult)
 {
 	uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -166,10 +175,28 @@ __global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 ca
 	TracePrimitiveResult traceResult;
 	if (TracePrimitive(ray, traceResult))
 	{
-		uint32 matId = triangles[traceResult.triId].matInd;
-		result[ind] = materials[matId].diffuse._x;
-		result[ind + 1] = materials[matId].diffuse._y;
-		result[ind + 2] = materials[matId].diffuse._z;
+		RTTriangle* tri = &triangles[traceResult.triId];
+		RTMaterial* mat = &materials[tri->matInd];
+		RTVertex* v0 = &vertices[tri->vertInd0];
+		RTVertex* v1 = &vertices[tri->vertInd1];
+		RTVertex* v2 = &vertices[tri->vertInd2];
+		float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
+		float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
+		float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
+		float2 uv = uv0 * traceResult.w + uv1 * traceResult.u + uv2 * traceResult.v;
+		if (mat->diffuseTexId >= 0)
+		{
+			float4 diffTex = tex2D<float4>(textures[mat->diffuseTexId].texObj, uv.x, uv.y);
+			result[ind] = diffTex.x;
+			result[ind + 1] = diffTex.y;
+			result[ind + 2] = diffTex.z;
+		}
+		else
+		{
+			result[ind] = mat->diffuse._x;
+			result[ind + 1] = mat->diffuse._y;
+			result[ind + 2] = mat->diffuse._z;
+		}
 	}
 	else
 	{
@@ -185,13 +212,65 @@ float4 V32F4(const NPMathHelper::Vec3& vec3)
 }
 
 template<class T, int dim, enum cudaTextureReadMode readMode>
-void BindCudaTexture(texture<T, dim, readMode> *tex, void* data, size_t size)
+void BindCudaTexture(texture<T, dim, readMode> *tex, void* data, size_t size, uint32 filterMode = cudaFilterModePoint)
 {
 	tex->normalized = false;
-	tex->filterMode = cudaFilterModePoint;
+	tex->filterMode = (cudaTextureFilterMode)filterMode;
 	tex->addressMode[0] = cudaAddressModeWrap;
 	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<T>();
 	HANDLE_ERROR(cudaBindTexture(0, *tex, data, channelDesc, size));
+}
+
+CURTTexture CreateCURTTexture(const RTTexture &cpuTex)
+{
+	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+	cudaArray* cuArray;
+	HANDLE_ERROR(cudaMallocArray(&cuArray, &channelDesc, cpuTex.width, cpuTex.height));
+	HANDLE_ERROR(cudaMemcpyToArray(cuArray, 0, 0, cpuTex.data, cpuTex.width*cpuTex.height*sizeof(float4), cudaMemcpyHostToDevice));
+
+	struct cudaResourceDesc resDesc;
+	memset(&resDesc, 0, sizeof(resDesc));
+	resDesc.resType = cudaResourceTypeArray;
+	resDesc.res.array.array = cuArray;
+
+	struct cudaTextureDesc texDesc;
+	memset(&texDesc, 0, sizeof(texDesc));
+	texDesc.addressMode[0] = cudaAddressModeWrap;
+	texDesc.addressMode[1] = cudaAddressModeWrap;
+	texDesc.filterMode = cudaFilterModeLinear;
+	texDesc.readMode = cudaReadModeElementType;
+	texDesc.normalizedCoords = 1;
+
+	cudaTextureObject_t texObj = 0;
+	HANDLE_ERROR(cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL));
+
+	CURTTexture cuRTTexture;
+	cuRTTexture.texObj = texObj;
+	cuRTTexture.cuArray = cuArray;
+	cuRTTexture.width = cpuTex.width;
+	cuRTTexture.height = cpuTex.height;
+
+	return cuRTTexture;
+}
+
+void ClearCudaDevData()
+{
+	HANDLE_ERROR(cudaUnbindTexture(g_bvhMinMaxBounds));
+	HANDLE_ERROR(cudaUnbindTexture(g_bvhOffsetTriStartN));
+	HANDLE_ERROR(cudaUnbindTexture(g_triIntersectionData));
+	CUFREE(g_devBVHMinMaxBounds);
+	CUFREE(g_devBVHOffsetTriStartN);
+	CUFREE(g_devTriIntersectionData);
+	CUFREE(g_devVertices);
+	CUFREE(g_devTriangles);
+	CUFREE(g_devMaterials);
+
+	for (auto &cuRTTex : g_cuRTTextures)
+	{
+		cudaDestroyTextureObject(cuRTTex.texObj);
+		CUFREEARRAY(cuRTTex.cuArray);
+	}
+	g_cuRTTextures.clear();
 }
 
 bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScene* scene
@@ -204,10 +283,29 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 	{
 		if (g_bIsCudaInit)
 		{
-			HANDLE_ERROR(cudaUnbindTexture(g_bvhMinMaxBounds));
-			HANDLE_ERROR(cudaUnbindTexture(g_bvhOffsetTriStartN));
-			HANDLE_ERROR(cudaUnbindTexture(g_triIntersectionData));
+			ClearCudaDevData();
 		}
+
+		// Texture
+		CURTTexture* tempCURTTextures = new CURTTexture[scene->m_pTextures.size()];
+		for (uint32 i = 0; i < scene->m_pTextures.size(); i++)
+		{
+			tempCURTTextures[i] = CreateCURTTexture(scene->m_pTextures[i].second);
+			g_cuRTTextures.push_back(tempCURTTextures[i]);
+		}
+
+		uint vertSize = scene->m_pVertices.size();
+		RTVertex* tempVertices = new RTVertex[vertSize];
+		{
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+				{
+					tempVertices[i] = scene->m_pVertices[i];
+				}
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, vertSize), f);
+		}
+
 
 		uint triSize = scene->m_pTriangles.size();
 		RTTriangle* tempTriangles = new RTTriangle[triSize];
@@ -251,25 +349,24 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, bvhNodeN), f);
 		}
-		CUFREE(g_devBVHMinMaxBounds);
-		CUFREE(g_devBVHOffsetTriStartN);
-		CUFREE(g_devTriIntersectionData);
-		CUFREE(g_devTriangles);
-		CUFREE(g_devMaterials);
 
 		// Create Dev Data
-		cudaMalloc((void**)&g_devMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size());
-		cudaMalloc((void**)&g_devTriangles, sizeof(RTTriangle) * triSize);
-		cudaMalloc((void**)&g_devTriIntersectionData, sizeof(float4) * triSize * 3);
-		cudaMalloc((void**)&g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2);
-		cudaMalloc((void**)&g_devBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2);
+		HANDLE_ERROR(cudaMalloc((void**)&g_devTextures, sizeof(CURTTexture) * scene->m_pTextures.size()));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size()));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devTriangles, sizeof(RTTriangle) * triSize));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devVertices, sizeof(RTVertex) * vertSize));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devTriIntersectionData, sizeof(float4) * triSize * 3));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2));
 
 		// MemCpy Dev Data
-		cudaMemcpy(g_devMaterials, tempMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size(), cudaMemcpyHostToDevice);
-		cudaMemcpy(g_devTriangles, tempTriangles, sizeof(RTTriangle) * triSize, cudaMemcpyHostToDevice);
-		cudaMemcpy(g_devTriIntersectionData, tempTriIntersectionData, sizeof(float4) * triSize * 3, cudaMemcpyHostToDevice);
-		cudaMemcpy(g_devBVHOffsetTriStartN, tempBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2, cudaMemcpyHostToDevice);
-		cudaMemcpy(g_devBVHMinMaxBounds, tempBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2, cudaMemcpyHostToDevice);
+		HANDLE_ERROR(cudaMemcpy(g_devTextures, tempCURTTextures, sizeof(CURTTexture) * scene->m_pTextures.size(), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devMaterials, tempMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size(), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devTriangles, tempTriangles, sizeof(RTTriangle) * triSize, cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devVertices, tempVertices, sizeof(RTVertex) * vertSize, cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devTriIntersectionData, tempTriIntersectionData, sizeof(float4) * triSize * 3, cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devBVHOffsetTriStartN, tempBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2, cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_devBVHMinMaxBounds, tempBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2, cudaMemcpyHostToDevice));
 
 		// Del Temp Data
 		DEL_ARRAY(tempBVHOffsetTriStartN);
@@ -277,6 +374,8 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 		DEL_ARRAY(tempTriIntersectionData);
 		DEL_ARRAY(tempTriangles);
 		DEL_ARRAY(tempMaterials);
+		DEL_ARRAY(tempVertices);
+		DEL_ARRAY(tempCURTTextures);
 
 		// Bind Dev Data To Texture
 		BindCudaTexture(&g_bvhMinMaxBounds, g_devBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2);
@@ -305,7 +404,7 @@ bool cudaPT0Render(float3 camPos, float3 camDir, float3 camUp, float fov, RTScen
 	// Kernel go here
 	dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 	dim3 grid(width / block.x, height / block.y, 1);
-	pt0_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, width, height, g_devTriangles, g_devMaterials, g_devTextures, g_devResultData, g_devAccResultData);
+	pt0_kernel << < grid, block >> > (camPos, camDir, camUp, camRight, fov, width, height, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devResultData, g_devAccResultData);
 
 	// Copy result to host
 	cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);

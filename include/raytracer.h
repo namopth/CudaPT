@@ -53,12 +53,11 @@ struct RTMaterial
 
 struct RTTexture
 {
-	std::string name;
 	float* data;
 	uint32 width;
 	uint32 height;
 
-	RTTexture() : name(), data(0), width(0), height(0) {}
+	RTTexture() : data(0), width(0), height(0) {}
 };
 
 class RTScene
@@ -96,7 +95,7 @@ public:
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;
 	std::vector<RTMaterial> m_pMaterials;
-	std::vector<RTTexture> m_pTextures;
+	std::vector<std::pair<std::string,RTTexture>> m_pTextures;
 protected:
 	std::vector<NPRayHelper::Sphere> m_vSpheres;
 	NPBVHHelper::BVHNode m_bvhRootNode;

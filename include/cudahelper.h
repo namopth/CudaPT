@@ -53,6 +53,10 @@
 #define CUFREE(x) if(x) cudaFree(x);
 #endif
 
+#if !defined(CUFREEARRAY)
+#define CUFREEARRAY(x) if(x) cudaFreeArray(x);
+#endif
+
 static void HandleError(cudaError_t err,
 	const char *file,
 	int line) {
