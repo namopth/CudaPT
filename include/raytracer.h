@@ -44,7 +44,8 @@ struct RTMaterial
 	RTMAT_TYPE matType;
 
 	RTMaterial() 
-		: diffuse(), ambient(), specular(), emissive()
+		: diffuse(1.0f, 1.0f, 1.0f), ambient(1.0f, 1.0f, 1.0f)
+		, specular(1.0f, 1.0f, 1.0f), emissive(1.0f, 1.0f, 1.0f)
 		, opacity(1.0f)
 		, diffuseTexId(-1), specularTexId(-1), emissiveTexId(-1)
 		, matType(RTMAT_TYPE_DIFFUSE) 

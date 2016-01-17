@@ -142,6 +142,15 @@ inline __hd__ float3 vecMul(const float3& lhs, const float3& rhs)
 #endif
 }
 
+inline __hd__ float4 vecMul(const float4& lhs, const float4& rhs)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float4(__fmul_rn(lhs.x, rhs.x), __fmul_rn(lhs.y, rhs.y), __fmul_rn(lhs.z, rhs.z), __fmul_rn(lhs.w, rhs.w));
+#else
+	return make_float4(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z, lhs.w * rhs.w);
+#endif
+}
+
 inline __hd__ float3 vecRcp(const float3& lhs)
 {
 #ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
@@ -178,6 +187,15 @@ inline __hd__ float3 operator+(const float3& lhs, const float3& rhs)
 	return make_float3(__fadd_rn(lhs.x,rhs.x), __fadd_rn(lhs.y,rhs.y), __fadd_rn(lhs.z,rhs.z));
 #else
 	return make_float3(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z);
+#endif
+}
+
+inline __hd__ float4 operator+(const float4& lhs, const float4& rhs)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float4(__fadd_rn(lhs.x,rhs.x), __fadd_rn(lhs.y,rhs.y), __fadd_rn(lhs.z,rhs.z), __fadd_rn(lhs.w,rhs.w));
+#else
+	return make_float4(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z, lhs.w + rhs.w);
 #endif
 }
 
