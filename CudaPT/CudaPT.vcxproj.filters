@@ -108,5 +108,11 @@
     <CudaCompile Include="..\src\cudaRTPT.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTDebug.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTCommon.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

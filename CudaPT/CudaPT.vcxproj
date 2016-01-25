@@ -133,6 +133,9 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
 copy /Y "$(SolutionDir)3rdParty\anttweakbar\lib\$(Configuration)\$(Platform)\AntTweakBar64.dll" "$(TargetDir)AntTweakBar64.dll"
 copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.dll"</Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h" />
@@ -167,6 +170,8 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <None Include="..\shader\FinalComposeVS.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\src\cudaRTCommon.cu" />
+    <CudaCompile Include="..\src\cudaRTDebug.cu" />
     <CudaCompile Include="..\src\cudaRTPT.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
