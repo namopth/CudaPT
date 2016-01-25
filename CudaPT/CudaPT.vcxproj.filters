@@ -24,9 +24,6 @@
     <ClInclude Include="..\include\atbhelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\include\brdfvisualizer.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\camhelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -43,9 +40,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\mathhelper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\ModelViewWindow.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\include\oshelper.h">
@@ -72,11 +66,11 @@
     <ClInclude Include="..\include\bvhhelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\cudaRTCommon.h">
+      <Filter>Cuda Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\brdfvisualizer.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\src\geohelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -87,9 +81,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\mathelper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\src\ModelViewWindow.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\src\oshelper.cpp">
@@ -114,7 +105,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="..\src\cudaRayTracer.cu">
+    <CudaCompile Include="..\src\cudaRTPT.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
   </ItemGroup>

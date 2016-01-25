@@ -1,0 +1,4 @@
+#ifndef CUDARAYTRACERCOMMON_H
+#define CUDARAYTRACERCOMMON_H
+
+#endif

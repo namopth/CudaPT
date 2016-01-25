@@ -275,7 +275,7 @@ bool RTScene::AddModel(const char* filename)
 RTRenderer::RTRenderer()
 	: m_pResult(0)
 	, m_pScene(0)
-	, m_renderer(RENDERER_CUDA)
+	, m_renderer(RENDERER_MODE_CUDA_PT)
 {
 
 }
@@ -286,6 +286,11 @@ RTRenderer::~RTRenderer()
 		delete m_pResult;
 		m_pResult = nullptr;
 	}
+}
+
+void RTRenderer::SetRendererMode(RENDERER_MODE mode)
+{
+	m_renderer = mode;
 }
 
 bool RTRenderer::Init(const unsigned int width, const unsigned int height)
@@ -310,10 +315,10 @@ bool RTRenderer::Init(const unsigned int width, const unsigned int height)
 bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
 	switch(m_renderer) {
-	case RENDERER_CPU:
+	case RENDERER_MODE_CPU_DEBUG:
 		return RenderCPU(camPos, camDir, camUp, fov, scene);
 		break;
-	case RENDERER_CUDA:
+	case RENDERER_MODE_CUDA_PT:
 		return RenderCUDA(camPos, camDir, camUp, fov, scene);
 		break;
 	}

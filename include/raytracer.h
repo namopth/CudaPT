@@ -108,14 +108,17 @@ protected:
 class RTRenderer
 {
 public:
-	enum RENDERER
+	enum RENDERER_MODE
 	{
-		RENDERER_CPU,
-		RENDERER_CUDA,
-		RENDERER_N
+		RENDERER_MODE_CPU_DEBUG,
+		RENDERER_MODE_CUDA_DEBUG,
+		RENDERER_MODE_CUDA_PT,
+		RENDERER_MODE_N
 	};
 	RTRenderer();
 	~RTRenderer();
+	inline const RENDERER_MODE GetRendererMode() const { return m_renderer; }
+	void SetRendererMode(const RENDERER_MODE mode);
 	bool Init(const unsigned int width, const unsigned int height);
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 	inline const float* GetResult() { return m_pResult; }
@@ -123,7 +126,7 @@ protected:
 	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 	bool RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 
-	RENDERER m_renderer;
+	RENDERER_MODE m_renderer;
 	RTScene* m_pScene;
 	float* m_pResult;
 	unsigned int m_uSizeW;

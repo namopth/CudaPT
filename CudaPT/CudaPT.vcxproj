@@ -136,17 +136,16 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h" />
-    <ClInclude Include="..\include\brdfvisualizer.h" />
     <ClInclude Include="..\include\bvhhelper.h" />
     <ClInclude Include="..\include\camhelper.h" />
     <ClInclude Include="..\include\cudahelper.h" />
     <ClInclude Include="..\include\cudapt.h" />
+    <ClInclude Include="..\include\cudaRTCommon.h" />
     <ClInclude Include="..\include\geohelper.h" />
     <ClInclude Include="..\include\glhelper.h" />
     <ClInclude Include="..\include\hdrhelper.h" />
     <ClInclude Include="..\include\macrohelper.h" />
     <ClInclude Include="..\include\mathhelper.h" />
-    <ClInclude Include="..\include\ModelViewWindow.h" />
     <ClInclude Include="..\include\oshelper.h" />
     <ClInclude Include="..\include\rayhelper.h" />
     <ClInclude Include="..\include\raytracer.h" />
@@ -154,14 +153,12 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <ClInclude Include="..\include\templatehelper.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\src\brdfvisualizer.cpp" />
     <ClCompile Include="..\src\bvhhelper.cpp" />
     <ClCompile Include="..\src\cudapt.cpp" />
     <ClCompile Include="..\src\geohelper.cpp" />
     <ClCompile Include="..\src\glhelper.cpp" />
     <ClCompile Include="..\src\hdrhelper.cpp" />
     <ClCompile Include="..\src\mathelper.cpp" />
-    <ClCompile Include="..\src\ModelViewWindow.cpp" />
     <ClCompile Include="..\src\oshelper.cpp" />
     <ClCompile Include="..\src\raytracer.cpp" />
   </ItemGroup>
@@ -170,7 +167,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <None Include="..\shader\FinalComposeVS.glsl" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="..\src\cudaRayTracer.cu" />
+    <CudaCompile Include="..\src\cudaRTPT.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

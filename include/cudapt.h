@@ -21,6 +21,8 @@ public:
 
 	void BrowseModel();
 
+	inline RTRenderer* GetRenderer() { return &m_raytracer; }
+
 protected:
 	std::vector<float> m_uiPTResultData;
 	GLuint m_uiPTResultTex;
