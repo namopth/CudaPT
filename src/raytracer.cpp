@@ -13,9 +13,19 @@
 
 #include "cudahelper.h"
 
-bool cudaPT0Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
-	, float fov, RTScene* scene
-	, float width, float height, float* result);
+namespace cudaRTPT{
+	bool cudaPT0Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
+		, float fov, RTScene* scene
+		, float width, float height, float* result);
+	void cudaPT0Clean();
+}
+
+namespace cudaRTDebug{
+	bool cudaDebugRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
+		, float fov, RTScene* scene
+		, float width, float height, float* result);
+	void cudaDebugClean();
+}
 
 
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
@@ -290,6 +300,16 @@ RTRenderer::~RTRenderer()
 
 void RTRenderer::SetRendererMode(RENDERER_MODE mode)
 {
+	switch (m_renderer) {
+	case RENDERER_MODE_CPU_DEBUG:
+		break;
+	case RENDERER_MODE_CUDA_PT:
+		cudaRTPT::cudaPT0Clean();
+		break;
+	case RENDERER_MODE_CUDA_DEBUG:
+		cudaRTDebug::cudaDebugClean();
+		break;
+	}
 	m_renderer = mode;
 }
 
@@ -319,7 +339,10 @@ bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NP
 		return RenderCPU(camPos, camDir, camUp, fov, scene);
 		break;
 	case RENDERER_MODE_CUDA_PT:
-		return RenderCUDA(camPos, camDir, camUp, fov, scene);
+		return cudaRTPT::cudaPT0Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
+		break;
+	case RENDERER_MODE_CUDA_DEBUG:
+		return cudaRTDebug::cudaDebugRender(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
 		break;
 	}
 	return false;
@@ -327,7 +350,7 @@ bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NP
 
 bool RTRenderer::RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
-	return cudaPT0Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
+	return cudaRTPT::cudaPT0Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
 }
 
 bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)

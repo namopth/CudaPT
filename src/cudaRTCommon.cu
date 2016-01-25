@@ -225,6 +225,8 @@ void freeAllBVHCudaMem()
 		CUFREEARRAY(cuRTTex.cuArray);
 	}
 	g_cuRTTextures.clear();
+
+	g_bIsCudaInit = false;
 }
 
 void initAllBVHCudaMem(RTScene* scene)

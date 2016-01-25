@@ -50,7 +50,7 @@
 #endif
 
 #if !defined(CUFREE)
-#define CUFREE(x) if(x) cudaFree(x);
+#define CUFREE(x) if(x) cudaFree(x); x = NULL;
 #endif
 
 #if !defined(CUFREEARRAY)
