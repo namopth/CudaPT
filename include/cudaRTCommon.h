@@ -55,6 +55,7 @@ struct TracePrimitiveResult
 };
 
 __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
+__device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 
 __hd__ float4 V32F4(const NPMathHelper::Vec3& vec3);
 __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3);

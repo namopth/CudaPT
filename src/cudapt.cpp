@@ -93,6 +93,7 @@ int CUDAPTWindow::OnInit()
 	TwEnumVal renderEV[] = {
 		{ RTRenderer::RENDERER_MODE_CPU_DEBUG, "CPU DEBUG" },
 		{ RTRenderer::RENDERER_MODE_CUDA_DEBUG, "CUDA DEBUG" },
+		{ RTRenderer::RENDERER_MODE_CUDA_DEBUG_BVH, "CUDA DEBUG BVH" },
 		{ RTRenderer::RENDERER_MODE_CUDA_PT, "CUDA PT" }
 	};
 	TwType renderType = TwDefineEnum("Rendering Method", renderEV, RTRenderer::RENDERER_MODE_N);

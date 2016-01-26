@@ -33,7 +33,7 @@ __hd__ float CURay::IntersectAABB(const float3& _min, const float3& _max) const
 	float3 real_max = vecMax(tmin, tmax);
 	float minmax = fminf(fminf(real_max.x, real_max.y), real_max.z);
 	float maxmin = fmaxf(fmaxf(real_min.x, real_min.y), real_min.z);
-	if (minmax >= maxmin)
+	if (minmax >= maxmin && (minmax > 0.f || maxmin > 0.f))
 		return (maxmin > M_EPSILON) ? maxmin : 0;
 	return M_INF;
 }
@@ -122,6 +122,50 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 	}
 
 	return false;
+}
+
+__device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const float maxDist, const float rayEpsilon, bool cullback)
+{
+	float minIntersect = maxDist;
+	uint32 traceCmd[BVH_DEPTH_MAX];
+	traceCmd[0] = 0;
+	int32 traceCmdPointer = 0;
+	uint depth = 0;
+	isLeaf = false;
+	while (traceCmdPointer >= 0)
+	{
+		uint32 curInd = traceCmd[traceCmdPointer--];
+		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);
+		float4 boundMax = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2 + 1);
+		float min = ray.IntersectAABB(make_float3(boundMin.x, boundMin.y, boundMin.z),
+			make_float3(boundMax.x, boundMax.y, boundMax.z));
+		if (min >= 0 && min < minIntersect)
+		{
+			uint1 offOrTs = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2);
+			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
+			if (tN.x == 0)
+			{
+				if (traceCmdPointer < BVH_DEPTH_MAX - 2)
+				{
+					traceCmd[++traceCmdPointer] = curInd + 1;
+					traceCmd[++traceCmdPointer] = curInd + offOrTs.x;
+				}
+			}
+			else
+			{
+				isLeaf = true;
+				minIntersect = min;
+				depth = traceCmdPointer + 2;
+			}
+		}
+		else
+		{
+			depth = max(depth, traceCmdPointer + 1);
+		}
+	}
+
+	result = depth;
+	return (depth != 0);
 }
 
 __hd__ float4 V32F4(const NPMathHelper::Vec3& vec3)

@@ -170,6 +170,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <None Include="..\shader\FinalComposeVS.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\src\cudaRTBVHDebug.cu" />
     <CudaCompile Include="..\src\cudaRTCommon.cu" />
     <CudaCompile Include="..\src\cudaRTDebug.cu" />
     <CudaCompile Include="..\src\cudaRTPT.cu" />

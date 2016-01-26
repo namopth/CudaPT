@@ -27,6 +27,13 @@ namespace cudaRTDebug{
 	void cudaDebugClean();
 }
 
+namespace cudaRTDebugBVH{
+	bool cudaDebugBVHRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
+		, float fov, RTScene* scene
+		, float width, float height, float* result);
+	void cudaDebugBVHClean();
+}
+
 
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 {
@@ -292,6 +299,9 @@ void RTRenderer::SetRendererMode(RENDERER_MODE mode)
 	case RENDERER_MODE_CUDA_DEBUG:
 		cudaRTDebug::cudaDebugClean();
 		break;
+	case RENDERER_MODE_CUDA_DEBUG_BVH:
+		cudaRTDebugBVH::cudaDebugBVHClean();
+		break;
 	}
 	m_renderer = mode;
 }
@@ -326,6 +336,9 @@ bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NP
 		break;
 	case RENDERER_MODE_CUDA_DEBUG:
 		return cudaRTDebug::cudaDebugRender(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
+		break;
+	case RENDERER_MODE_CUDA_DEBUG_BVH:
+		return cudaRTDebugBVH::cudaDebugBVHRender(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
 		break;
 	}
 	return false;

@@ -2,7 +2,7 @@
 
 #define BLOCK_SIZE 16
 
-namespace cudaRTDebug
+namespace cudaRTDebugBVH
 {
 
 	float* g_devResultData = nullptr;
@@ -17,41 +17,52 @@ namespace cudaRTDebug
 	{
 		ShootRayResult rayResult;
 
-		TracePrimitiveResult traceResult;
-		if (TracePrimitive(ray, traceResult))
+		//TracePrimitiveResult traceResult;
+		//if (TracePrimitive(ray, traceResult))
+		//{
+		//	RTTriangle* tri = &triangles[traceResult.triId];
+		//	RTMaterial* mat = &materials[tri->matInd];
+		//	RTVertex* v0 = &vertices[tri->vertInd0];
+		//	RTVertex* v1 = &vertices[tri->vertInd1];
+		//	RTVertex* v2 = &vertices[tri->vertInd2];
+		//	float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
+		//	float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
+		//	float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
+		//	float2 uv = uv0 * traceResult.w + uv1 * traceResult.u + uv2 * traceResult.v;
+		//	float3 n0 = V32F3(v0->norm);
+		//	float3 n1 = V32F3(v1->norm);
+		//	float3 n2 = V32F3(v2->norm);
+		//	float3 norm = n0 * traceResult.w + n1 * traceResult.u + n2 * traceResult.v;
+
+		//	float4 diff;
+		//	float3 ambient;
+		//	float3 specular;
+		//	float3 emissive;
+		//	GetMaterialColors(mat, uv, textures, diff, ambient, specular, emissive);
+
+		//	float3 w = norm;
+		//	float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
+		//	float3 v = vecCross(w, u);
+
+		//	rayResult.light = diff;
+		//}
+		//else
 		{
-			RTTriangle* tri = &triangles[traceResult.triId];
-			RTMaterial* mat = &materials[tri->matInd];
-			RTVertex* v0 = &vertices[tri->vertInd0];
-			RTVertex* v1 = &vertices[tri->vertInd1];
-			RTVertex* v2 = &vertices[tri->vertInd2];
-			float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
-			float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
-			float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
-			float2 uv = uv0 * traceResult.w + uv1 * traceResult.u + uv2 * traceResult.v;
-			float3 n0 = V32F3(v0->norm);
-			float3 n1 = V32F3(v1->norm);
-			float3 n2 = V32F3(v2->norm);
-			float3 norm = n0 * traceResult.w + n1 * traceResult.u + n2 * traceResult.v;
-
-			float4 diff;
-			float3 ambient;
-			float3 specular;
-			float3 emissive;
-			GetMaterialColors(mat, uv, textures, diff, ambient, specular, emissive);
-
-			float3 w = norm;
-			float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
-			float3 v = vecCross(w, u);
-
-			rayResult.light = diff;
+			rayResult.light.x = 0.f;
+			rayResult.light.y = 0.f;
+			rayResult.light.z = 0.f;
+			rayResult.light.w = 0.f;
 		}
-		else
+
+		uint traceDepth;
+		bool leaf;
+		if (TraceDepth(ray, traceDepth, leaf))
 		{
-			rayResult.light.x = 1.f;
-			rayResult.light.y = 1.f;
-			rayResult.light.z = 1.f;
-			rayResult.light.w = 1.f;
+			float depthValue = traceDepth / 10.f;
+			if (leaf)
+				rayResult.light.y += depthValue;
+			else
+				rayResult.light.x += depthValue;
 		}
 
 		return rayResult;
@@ -79,13 +90,13 @@ namespace cudaRTDebug
 		result[ind + 2] = rayResult.light.z;
 	}
 
-	void cudaDebugClean()
+	void cudaDebugBVHClean()
 	{
 		freeAllBVHCudaMem();
 		CUFREE(g_devResultData);
 	}
 
-	bool cudaDebugRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
+	bool cudaDebugBVHRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
 	{
 		// Check and allocate everything
