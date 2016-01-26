@@ -69,12 +69,6 @@ int CUDAPTWindow::OnInit()
 {
 
 	m_raytracer.Init(m_iSizeW, m_iSizeH);
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(0.f, 0.f, 5.f), 1.f));
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(-5.f, 0.f, 5.f), 1.f));
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(5.f, 0.f, 5.f), 1.f));
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(0.f, 0.f, -5.f), 1.f));
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(-5.f, 0.f, -5.f), 1.f));
-	m_scene.AddSphere(NPRayHelper::Sphere(NPMathHelper::Vec3(5.f, 0.f, -5.f), 1.f));
 
 	m_uiPTResultData.resize(m_iSizeW * m_iSizeH * 3);
 	for (int i = 0; i < m_iSizeW; i++)

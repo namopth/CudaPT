@@ -89,8 +89,6 @@ public:
 	inline void SetIsCudaDirty(bool dirty = false) { m_bIsCudaDirty = dirty; }
 
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
-
-	void AddSphere(NPRayHelper::Sphere sphere) { m_vSpheres.push_back(sphere); }
 	bool AddModel(const char* filename);
 
 	std::vector<RTVertex> m_pVertices;

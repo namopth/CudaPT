@@ -63,7 +63,8 @@ namespace cudaRTPT
 				float3 refDir = normalize(u*cosf(r1)*r2s + v*sinf(r1)*r2s + w*sqrtf(1.f - r2));
 				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
 				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-				shadeResult = vecMul(diff, nextRayResult.light) + make_float4(emissive.x, emissive.y, emissive.z, 0.f) + make_float4(ambient.x, ambient.y, ambient.z, 0.f);
+				float cosine = vecDot(norm, refDir);
+				shadeResult = cosine * vecMul(diff, nextRayResult.light) + make_float4(emissive.x, emissive.y, emissive.z, 0.f) + make_float4(ambient.x, ambient.y, ambient.z, 0.f);
 			}
 			else if (mat->matType == RTMAT_TYPE_SPECULAR)
 			{
@@ -118,13 +119,14 @@ namespace cudaRTPT
 
 		float u = (2.f * ((float)x + 0.5f) / width - 1.f) * tan(fov * 0.5f) * width / height;
 		float v = (2.f * ((float)y + 0.5f) / height - 1.f) * tan(fov * 0.5f);
-		float3 dir = normalize(camRight * u + camUp * v + camDir);
-		CURay ray(camPos, dir);
 
 		curandState randstate;
 		curand_init(hashedFrameN + ind, 0, 0, &randstate);
-		u = u + (curand_uniform(&randstate) - 0.5f);
-		v = v + (curand_uniform(&randstate) - 0.5f);
+		u = u + (curand_uniform(&randstate) - 0.5f) / width;
+		v = v + (curand_uniform(&randstate) - 0.5f) / height;
+
+		float3 dir = normalize(camRight * u + camUp * v + camDir);
+		CURay ray(camPos, dir);
 
 		ShootRayResult rayResult = pt0_normalRay(ray, vertices, triangles, materials, textures, &randstate);
 

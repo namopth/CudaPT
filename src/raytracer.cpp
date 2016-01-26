@@ -31,23 +31,6 @@ namespace cudaRTDebug{
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 {
 	float minIntersect = M_INF;
-	//for (int i = 0; i < m_vSpheres.size(); i++)
-	//{
-	//	NPRayHelper::Sphere sphere = m_vSpheres[i];
-	//	NPMathHelper::Vec3 pos, norm;
-	//	if (sphere.intersect(r, pos, norm))
-	//	{
-	//		float dist = (pos - r.origPoint).length();
-	//		if (dist < minIntersect)
-	//		{
-	//			minIntersect = dist;
-	//			result.hitPosition = pos;
-	//			result.hitNormal = norm;
-	//			result.objId = i;
-	//			result.objType = OBJ_SPHERE;
-	//		}
-	//	}
-	//}
 
 	if (m_compactBVH.IsValid())
 	{

@@ -222,6 +222,20 @@ inline __hd__ float3 operator*(const float& lhs, const float3& rhs)
 	return rhs*lhs;
 }
 
+inline __hd__ float4 operator*(const float4& lhs, const float& rhs)
+{
+#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
+	return make_float4(__fmul_rn(lhs.x, rhs), __fmul_rn(lhs.y, rhs), __fmul_rn(lhs.z, rhs), __fmul_rn(lhs.w, rhs));
+#else
+	return make_float4(lhs.x*rhs, lhs.y*rhs, lhs.z*rhs, lhs.w*rhs);
+#endif
+}
+
+inline __hd__ float4 operator*(const float& lhs, const float4& rhs)
+{
+	return rhs*lhs;
+}
+
 inline __hd__ float3 operator/(const float3& lhs, const float3& rhs)
 {
 #ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
