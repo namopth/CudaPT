@@ -72,7 +72,7 @@ namespace NPBVHHelper
 		// choose split axis
 		uint32 splitAxis = 0;
 		if (abs(boundDia._y) > abs(boundDia._x)) splitAxis = 1;
-		if (abs(boundDia._z) > abs(boundDia._y)) splitAxis = 2;
+		if (abs(boundDia._z) > abs(boundDia._y) && abs(boundDia._z) > abs(boundDia._x)) splitAxis = 2;
 		float longestAxisLength = abs(boundDia._e[splitAxis]);
 
 		// calculate bins
