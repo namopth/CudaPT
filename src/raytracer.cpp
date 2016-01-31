@@ -12,27 +12,21 @@
 #include <SOIL.h>
 
 #include "cudahelper.h"
+#include "attrhelper.h"
 
-namespace cudaRTPT{
-	bool cudaPT0Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
-		, float fov, RTScene* scene
-		, float width, float height, float* result);
-	void cudaPT0Clean();
-}
-
-namespace cudaRTDebug{
-	bool cudaDebugRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
-		, float fov, RTScene* scene
-		, float width, float height, float* result);
-	void cudaDebugClean();
-}
-
-namespace cudaRTDebugBVH{
-	bool cudaDebugBVHRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
-		, float fov, RTScene* scene
-		, float width, float height, float* result);
-	void cudaDebugBVHClean();
-}
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) \
+	namespace __codename__{ \
+	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp \
+	, float fov, RTScene* scene \
+	, float width, float height, float* result); \
+	void CleanMem(); \
+	NPAttrHelper::Attrib* GetAttribute(unsigned __int32 ind, std::string &name); \
+	unsigned __int32 GetAttribsN(); \
+	}
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 
 
 bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
@@ -275,7 +269,9 @@ bool RTScene::AddModel(const char* filename)
 RTRenderer::RTRenderer()
 	: m_pResult(0)
 	, m_pScene(0)
-	, m_renderer(RENDERER_MODE_CUDA_PT)
+	, m_renderer(RENDERER_MODE_CPU_DEBUG)
+	, m_pRenderBar(nullptr)
+	, m_pMaterialBar(nullptr)
 {
 
 }
@@ -293,17 +289,16 @@ void RTRenderer::SetRendererMode(RENDERER_MODE mode)
 	switch (m_renderer) {
 	case RENDERER_MODE_CPU_DEBUG:
 		break;
-	case RENDERER_MODE_CUDA_PT:
-		cudaRTPT::cudaPT0Clean();
-		break;
-	case RENDERER_MODE_CUDA_DEBUG:
-		cudaRTDebug::cudaDebugClean();
-		break;
-	case RENDERER_MODE_CUDA_DEBUG_BVH:
-		cudaRTDebugBVH::cudaDebugBVHClean();
-		break;
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) case RENDERER_MODE_##__codename__: \
+	__codename__::CleanMem();\
+	break;
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 	}
 	m_renderer = mode;
+	updateTWBar();
 }
 
 bool RTRenderer::Init(const unsigned int width, const unsigned int height)
@@ -329,27 +324,18 @@ bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NP
 {
 	switch(m_renderer) {
 	case RENDERER_MODE_CPU_DEBUG:
-		return RenderCPU(camPos, camDir, camUp, fov, scene);
-		break;
-	case RENDERER_MODE_CUDA_PT:
-		return cudaRTPT::cudaPT0Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
-		break;
-	case RENDERER_MODE_CUDA_DEBUG:
-		return cudaRTDebug::cudaDebugRender(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
-		break;
-	case RENDERER_MODE_CUDA_DEBUG_BVH:
-		return cudaRTDebugBVH::cudaDebugBVHRender(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
-		break;
+		return renderCPU(camPos, camDir, camUp, fov, scene);
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) case RENDERER_MODE_##__codename__: \
+	return __codename__::Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 	}
 	return false;
 }
 
-bool RTRenderer::RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
-{
-	return cudaRTPT::cudaPT0Render(camPos, camDir, camUp, fov, &scene, m_uSizeW, m_uSizeH, m_pResult);
-}
-
-bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
+bool RTRenderer::renderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
 	NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
 	camUp = camRight.cross(camDir).normalize();
@@ -388,4 +374,66 @@ bool RTRenderer::RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir,
 	tbb::parallel_for(tbb::blocked_range2d< int, int >(0, m_uSizeH, 0, m_uSizeW), f);
 
 	return true;
+}
+
+void RTRenderer::updateTWBar()
+{
+	if (m_pRenderBar)
+	{
+		TwRemoveAllVars(m_pRenderBar);
+	}
+	else
+	{
+		m_pRenderBar = TwNewBar("Renderer Setting");
+	}
+
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) if (m_renderer == RENDERER_MODE_##__codename__)\
+	{\
+		for (uint32 i = 0; i < __codename__::GetAttribsN(); i++)\
+		{\
+			std::string valName;\
+			NPAttrHelper::Attrib* att = __codename__::GetAttribute(i, valName);\
+			if (att->attrType == NPAttrHelper::ATTR_BOOL)\
+			{\
+				ATB_ASSERT(TwAddVarRW(m_pRenderBar, valName.c_str(), TW_TYPE_BOOLCPP, att->GetBool(),\
+					"group='Render Parameters'"));\
+			}\
+			else if (att->attrType == NPAttrHelper::ATTR_ENUM)\
+			{\
+				TwEnumVal* enumEV = new TwEnumVal[att->attrLength];\
+				for (uint32 j = 0; j < att->attrLength; j++)\
+				{\
+					enumEV[j].Value = j;\
+					enumEV[j].Label = att->attrEnumName[j];\
+				}\
+				TwType renderType = TwDefineEnum(valName.c_str(), enumEV, att->attrLength);\
+				ATB_ASSERT(TwAddVarRW(m_pRenderBar, valName.c_str(), renderType, att->GetUint(),\
+					"group='Render Parameters'"));\
+				delete[] enumEV;\
+			}\
+			else if (att->attrType == NPAttrHelper::ATTR_FLOAT)\
+			{\
+				ATB_ASSERT(TwAddVarRW(m_pRenderBar, valName.c_str(), TW_TYPE_FLOAT, att->GetFloat(),\
+					"group='Render Parameters'"));\
+			}\
+			else if (att->attrType == NPAttrHelper::ATTR_INT)\
+			{\
+				ATB_ASSERT(TwAddVarRW(m_pRenderBar, valName.c_str(), TW_TYPE_INT32, att->GetInt(),\
+					"group='Render Parameters'"));\
+			}\
+			else if (att->attrType == NPAttrHelper::ATTR_STR)\
+			{\
+			\
+			}\
+			else if (att->attrType == NPAttrHelper::ATTR_UINT)\
+			{\
+				ATB_ASSERT(TwAddVarRW(m_pRenderBar, valName.c_str(), TW_TYPE_UINT32, att->GetUint(),\
+					"group='Render Parameters'"));\
+			}\
+		}\
+	}
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 }

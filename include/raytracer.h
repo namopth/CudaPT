@@ -1,9 +1,16 @@
+#ifdef RT_XGEN
+DEFINE_RT(Cuda Pathtracing, cudaRTPT)
+DEFINE_RT(Cuda Debug, cudaRTDebug)
+DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
+#endif
+
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
 #include "mathhelper.h"
 #include "rayhelper.h"
 #include "bvhhelper.h"
+#include "atbhelper.h"
 
 #include <vector>
 
@@ -109,9 +116,11 @@ public:
 	enum RENDERER_MODE
 	{
 		RENDERER_MODE_CPU_DEBUG,
-		RENDERER_MODE_CUDA_DEBUG,
-		RENDERER_MODE_CUDA_DEBUG_BVH,
-		RENDERER_MODE_CUDA_PT,
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) RENDERER_MODE_##__codename__,
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 		RENDERER_MODE_N
 	};
 	RTRenderer();
@@ -122,13 +131,16 @@ public:
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
 	inline const float* GetResult() { return m_pResult; }
 protected:
-	bool RenderCUDA(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
-	bool RenderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
+	bool renderCPU(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene);
+	void updateTWBar();
 
 	RENDERER_MODE m_renderer;
 	RTScene* m_pScene;
 	float* m_pResult;
 	unsigned int m_uSizeW;
 	unsigned int m_uSizeH;
+
+	TwBar* m_pRenderBar;
+	TwBar* m_pMaterialBar;
 };
 #endif

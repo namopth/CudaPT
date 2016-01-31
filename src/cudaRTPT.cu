@@ -4,6 +4,9 @@
 #define NORMALRAY_BOUND_MAX 3
 namespace cudaRTPT
 {
+	CUDA_RT_COMMON_ATTRIBS_N(0)
+	CUDA_RT_COMMON_ATTRIBS_BGN
+	CUDA_RT_COMMON_ATTRIBS_END
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
@@ -132,19 +135,19 @@ namespace cudaRTPT
 
 		float resultInf = 1.f / (float)(frameN + 1);
 		float oldInf = 1.f - resultInf;
-		result[ind] = resultInf * rayResult.light.x + oldInf * result[ind];
-		result[ind + 1] = resultInf * rayResult.light.y + oldInf * result[ind + 1];
-		result[ind + 2] = resultInf * rayResult.light.z + oldInf * result[ind + 2];
+		result[ind] = max(resultInf * rayResult.light.x + oldInf * result[ind], 0.f);
+		result[ind + 1] = max(resultInf * rayResult.light.y + oldInf * result[ind + 1], 0.f);
+		result[ind + 2] = max(resultInf * rayResult.light.z + oldInf * result[ind + 2], 0.f);
 	}
 
-	void cudaPT0Clean()
+	void CleanMem()
 	{
 		freeAllBVHCudaMem();
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
 	}
 
-	bool cudaPT0Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
+	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
 	{
 		// Check and allocate everything

@@ -2,8 +2,17 @@
 
 #define BLOCK_SIZE 16
 
-namespace cudaRTDebugBVH
+namespace cudaRTBVHDebug
 {
+	const char* g_enumDebugModeName[] = { "Normal", "TraceCost", "BVHDepth" };
+	NPAttrHelper::Attrib g_enumDebugMode("BVHDebugMode", g_enumDebugModeName, 3, 0);
+	NPAttrHelper::Attrib g_uiSpecDepth("SpecifiedBVHDepth", 0);
+
+	CUDA_RT_COMMON_ATTRIBS_N(2)
+	CUDA_RT_COMMON_ATTRIBS_BGN
+	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Debug Mode, g_enumDebugMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, BVH Depth, g_uiSpecDepth)
+	CUDA_RT_COMMON_ATTRIBS_END
 
 	float* g_devResultData = nullptr;
 	size_t g_resultDataSize = 0;
@@ -17,36 +26,6 @@ namespace cudaRTDebugBVH
 	{
 		ShootRayResult rayResult;
 
-		//TracePrimitiveResult traceResult;
-		//if (TracePrimitive(ray, traceResult))
-		//{
-		//	RTTriangle* tri = &triangles[traceResult.triId];
-		//	RTMaterial* mat = &materials[tri->matInd];
-		//	RTVertex* v0 = &vertices[tri->vertInd0];
-		//	RTVertex* v1 = &vertices[tri->vertInd1];
-		//	RTVertex* v2 = &vertices[tri->vertInd2];
-		//	float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
-		//	float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
-		//	float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
-		//	float2 uv = uv0 * traceResult.w + uv1 * traceResult.u + uv2 * traceResult.v;
-		//	float3 n0 = V32F3(v0->norm);
-		//	float3 n1 = V32F3(v1->norm);
-		//	float3 n2 = V32F3(v2->norm);
-		//	float3 norm = n0 * traceResult.w + n1 * traceResult.u + n2 * traceResult.v;
-
-		//	float4 diff;
-		//	float3 ambient;
-		//	float3 specular;
-		//	float3 emissive;
-		//	GetMaterialColors(mat, uv, textures, diff, ambient, specular, emissive);
-
-		//	float3 w = norm;
-		//	float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
-		//	float3 v = vecCross(w, u);
-
-		//	rayResult.light = diff;
-		//}
-		//else
 		{
 			rayResult.light.x = 0.f;
 			rayResult.light.y = 0.f;
@@ -68,7 +47,65 @@ namespace cudaRTDebugBVH
 		return rayResult;
 	}
 
-	__global__ void ptDebug_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
+	__device__ ShootRayResult ptDebug_costRay(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures)
+	{
+		ShootRayResult rayResult;
+
+		{
+			rayResult.light.x = 0.f;
+			rayResult.light.y = 0.f;
+			rayResult.light.z = 0.f;
+			rayResult.light.w = 0.f;
+		}
+
+		uint traceCost;
+		bool leaf;
+		if (TraceCost(ray, traceCost, leaf))
+		{
+			float costValue = traceCost / 10.f;
+			if (leaf)
+				rayResult.light.y += costValue;
+			else
+				rayResult.light.x += costValue;
+		}
+
+		return rayResult;
+	}
+
+	__device__ ShootRayResult ptDebug_specDepthRay(const uint specDepth, const CURay& ray
+		, RTVertex* vertices, RTTriangle* triangles , RTMaterial* materials, CURTTexture* textures)
+	{
+		ShootRayResult rayResult;
+
+		{
+			rayResult.light.x = 0.f;
+			rayResult.light.y = 0.f;
+			rayResult.light.z = 0.f;
+			rayResult.light.w = 0.f;
+		}
+
+		int traceDepth;
+		uint parentId;
+		bool leaf;
+		if (TraceDepthParent(ray, traceDepth, parentId, specDepth))
+		{
+			curandState randstate;
+			curand_init(parentId, 0, 0, &randstate);
+			float col = curand_uniform(&randstate);
+			if (traceDepth == specDepth)
+			{
+				rayResult.light.y += col;
+			}
+			else
+			{
+				rayResult.light.x = 0.3f;
+			}
+		}
+
+		return rayResult;
+	}
+
+	__global__ void ptDebug_kernel(const uint specDepth, const uint debugMode, float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
 		float width, float height, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
 		, float* result)
 	{
@@ -83,20 +120,32 @@ namespace cudaRTDebugBVH
 		float3 dir = normalize(camRight * u + camUp * v + camDir);
 		CURay ray(camPos, dir);
 
-		ShootRayResult rayResult = ptDebug_normalRay(ray, vertices, triangles, materials, textures);
+		ShootRayResult rayResult;
+		if (debugMode == 0)
+		{
+			rayResult = ptDebug_normalRay(ray, vertices, triangles, materials, textures);
+		}
+		else if (debugMode == 1)
+		{
+			rayResult = ptDebug_costRay(ray, vertices, triangles, materials, textures);
+		}
+		else
+		{
+			rayResult = ptDebug_specDepthRay(specDepth, ray, vertices, triangles, materials, textures);
+		}
 
 		result[ind] = rayResult.light.x;
 		result[ind + 1] = rayResult.light.y;
 		result[ind + 2] = rayResult.light.z;
 	}
 
-	void cudaDebugBVHClean()
+	void CleanMem()
 	{
 		freeAllBVHCudaMem();
 		CUFREE(g_devResultData);
 	}
 
-	bool cudaDebugBVHRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
+	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
 	{
 		// Check and allocate everything
@@ -105,7 +154,7 @@ namespace cudaRTDebugBVH
 
 		NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
 		camUp = camRight.cross(camDir).normalize();
-
+		
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
 			initAllBVHCudaMem(scene);
@@ -129,7 +178,7 @@ namespace cudaRTDebugBVH
 		// Kernel go here
 		dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 		dim3 grid(width / block.x, height / block.y, 1);
-		ptDebug_kernel << < grid, block >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
+		ptDebug_kernel << < grid, block >> > (*g_uiSpecDepth.GetUint(), *g_enumDebugMode.GetUint(), f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
 			, g_devResultData);
 
 		// Copy result to host

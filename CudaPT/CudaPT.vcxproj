@@ -139,6 +139,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h" />
+    <ClInclude Include="..\include\attrhelper.h" />
     <ClInclude Include="..\include\bvhhelper.h" />
     <ClInclude Include="..\include\camhelper.h" />
     <ClInclude Include="..\include\cudahelper.h" />

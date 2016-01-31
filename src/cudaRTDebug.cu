@@ -2,8 +2,12 @@
 
 #define BLOCK_SIZE 16
 
+
 namespace cudaRTDebug
 {
+	CUDA_RT_COMMON_ATTRIBS_N(0)
+	CUDA_RT_COMMON_ATTRIBS_BGN
+	CUDA_RT_COMMON_ATTRIBS_END
 
 	float* g_devResultData = nullptr;
 	size_t g_resultDataSize = 0;
@@ -79,13 +83,13 @@ namespace cudaRTDebug
 		result[ind + 2] = rayResult.light.z;
 	}
 
-	void cudaDebugClean()
+	void CleanMem()
 	{
 		freeAllBVHCudaMem();
 		CUFREE(g_devResultData);
 	}
 
-	bool cudaDebugRender(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
+	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
 	{
 		// Check and allocate everything

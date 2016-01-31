@@ -91,10 +91,12 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddVarRW(mainBar, "Tracer_Enabled", TW_TYPE_BOOLCPP, &m_bIsTracing, "group='Tracer' label='Enable'"));
 
 	TwEnumVal renderEV[] = {
-		{ RTRenderer::RENDERER_MODE_CPU_DEBUG, "CPU DEBUG" },
-		{ RTRenderer::RENDERER_MODE_CUDA_DEBUG, "CUDA DEBUG" },
-		{ RTRenderer::RENDERER_MODE_CUDA_DEBUG_BVH, "CUDA DEBUG BVH" },
-		{ RTRenderer::RENDERER_MODE_CUDA_PT, "CUDA PT" }
+		{ RTRenderer::RENDERER_MODE_CPU_DEBUG, "CPU DEBUG" }
+#define RT_XGEN
+#define DEFINE_RT(__name__, __codename__) ,{RTRenderer::RENDERER_MODE_##__codename__, #__name__}
+#include "raytracer.h"
+#undef DEFINE_RT(__name__, __codename__)
+#undef RT_XGEN
 	};
 	TwType renderType = TwDefineEnum("Rendering Method", renderEV, RTRenderer::RENDERER_MODE_N);
 	TwAddVarCB(mainBar, "Rendering", renderType, SetRenderingMethodCallback, GetRenderingMethodCallback, this

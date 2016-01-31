@@ -70,7 +70,8 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 	uint32 traceCmd[BVH_DEPTH_MAX];
 	traceCmd[0] = 0;
 	int32 traceCmdPointer = 0;
-	while (traceCmdPointer >= 0)
+	uint32 tracedTime = 0;
+	while (traceCmdPointer >= 0 && tracedTime++ < BVH_TRACE_MAX)
 	{
 		uint32 curInd = traceCmd[traceCmdPointer--];
 		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);
@@ -83,7 +84,7 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
 			if (tN.x == 0)
 			{
-				if (traceCmdPointer < BVH_DEPTH_MAX - 2)
+				if (traceCmdPointer < BVH_DEPTH_MAX - 3)
 				{
 					traceCmd[++traceCmdPointer] = curInd + 1;
 					traceCmd[++traceCmdPointer] = curInd + offOrTs.x;
@@ -124,6 +125,66 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 	return false;
 }
 
+__device__ bool TraceDepthParent(const CURay &ray, int& result, uint& parentId, const uint specDepth, const float maxDist, const float rayEpsilon, bool cullback)
+{
+	float minIntersect = maxDist;
+	uint32 traceCmd[BVH_DEPTH_MAX];
+	uint32 parentIdCmd[BVH_DEPTH_MAX];
+	uint32 depthCmd[BVH_DEPTH_MAX];
+	parentIdCmd[0] = 0;
+	traceCmd[0] = 0;
+	depthCmd[0] = 0;
+	int32 traceCmdPointer = 0;
+	int depth = -1;
+	uint parent = 0;
+	bool isHitSomething = false;
+	uint32 tracedTime = 0;
+	while (traceCmdPointer >= 0 && tracedTime++ < BVH_TRACE_MAX)
+	{
+		uint32 curCmdPointer = traceCmdPointer--;
+		uint32 curInd = traceCmd[curCmdPointer];
+		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);
+		float4 boundMax = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2 + 1);
+		float min = ray.IntersectAABB(make_float3(boundMin.x, boundMin.y, boundMin.z),
+			make_float3(boundMax.x, boundMax.y, boundMax.z));
+		if (min >= 0 && min < minIntersect)
+		{
+			isHitSomething = true;
+			uint curDepth = depthCmd[curCmdPointer];
+			if (specDepth == curDepth)
+			{
+				minIntersect = min;
+				depth = curDepth;
+				parent = parentIdCmd[curCmdPointer];
+				break;
+			}
+
+			uint1 offOrTs = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2);
+			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
+			if (tN.x == 0)
+			{
+				if (traceCmdPointer < BVH_DEPTH_MAX - 2)
+				{
+					traceCmd[++traceCmdPointer] = curInd + 1;
+					parentIdCmd[traceCmdPointer] = curInd;
+					depthCmd[traceCmdPointer] = curDepth + 1;
+					traceCmd[++traceCmdPointer] = curInd + offOrTs.x;
+					parentIdCmd[traceCmdPointer] = curInd;
+					depthCmd[traceCmdPointer] = curDepth + 1;
+				}
+			}
+		}
+	}
+
+	if (isHitSomething)
+	{
+		result = depth;
+		parentId = parent;
+	}
+
+	return isHitSomething;
+}
+
 __device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const float maxDist, const float rayEpsilon, bool cullback)
 {
 	float minIntersect = maxDist;
@@ -132,7 +193,8 @@ __device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const f
 	int32 traceCmdPointer = 0;
 	uint depth = 0;
 	isLeaf = false;
-	while (traceCmdPointer >= 0)
+	uint32 tracedTime = 0;
+	while (traceCmdPointer >= 0 && tracedTime++ < BVH_TRACE_MAX)
 	{
 		uint32 curInd = traceCmd[traceCmdPointer--];
 		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);
@@ -176,7 +238,8 @@ __device__ bool TraceCost(const CURay &ray, uint& result, bool& isLeaf, const fl
 	int32 traceCmdPointer = 0;
 	isLeaf = false;
 	result = 0;
-	while (traceCmdPointer >= 0)
+	uint32 tracedTime = 0;
+	while (traceCmdPointer >= 0 && tracedTime++ < BVH_TRACE_MAX)
 	{
 		uint32 curInd = traceCmd[traceCmdPointer--];
 		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);

@@ -40,7 +40,7 @@ namespace NPBVHHelper
 	};
 
 	// return reordered tri order
-	std::vector<uint32> CreateBVH(BVHNode* root, const std::vector<uint32> &tri, const std::vector<NPMathHelper::Vec3> &vert, uint32 maxDepth = 128);
+	std::vector<uint32> CreateBVH(BVHNode* root, const std::vector<uint32> &tri, const std::vector<NPMathHelper::Vec3> &vert, uint32 maxDepth = 32);
 
 	struct CompactBVH
 	{

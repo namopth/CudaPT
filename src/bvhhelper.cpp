@@ -37,12 +37,19 @@ namespace NPBVHHelper
 			return 0;
 		return boundDia._x * boundDia._y + boundDia._x * boundDia._z + boundDia._y * boundDia._z;
 	}
-
+	uint32 maxTriN = 0;
 	void InitialBVHLeafNode(BVHNode* node, uint32 triStart, uint32 triN)
 	{
+		//std::cout << "BVH Leaf Node Created: N = " << triN << std::endl;
 		node->triStart = triStart;
 		node->triN = triN;
+		node->desN = 0;
 		node->childNodes[0] = node->childNodes[1] = nullptr;
+		if (triN > maxTriN)
+		{
+			maxTriN = triN;
+			std::cout << "Max Tri N = " << maxTriN << std::endl;
+		}
 	}
 
 	void InitialBVHNode(BVHNode* node
@@ -74,6 +81,7 @@ namespace NPBVHHelper
 		if (abs(boundDia._y) > abs(boundDia._x)) splitAxis = 1;
 		if (abs(boundDia._z) > abs(boundDia._y) && abs(boundDia._z) > abs(boundDia._x)) splitAxis = 2;
 		float longestAxisLength = abs(boundDia._e[splitAxis]);
+		//std::cout << "Split Axis = " << splitAxis << std::endl;
 
 		// calculate bins
 		BVHBIN binData[BVH_SAH_BIN_N];
@@ -101,6 +109,12 @@ namespace NPBVHHelper
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, BVH_SAH_BIN_N), f);
 		}
+		//std::cout << "BIN Data = ";
+		//for (uint32 i = 0; i < BVH_SAH_BIN_N; i++)
+		//{
+		//	std::cout << binData[i].triN << "(" << AABBSurfaceArea(binData[i].centroidBound) << "), ";
+		//}
+		//std::cout << std::endl;
 
 		//Calculate heuristic value for each case
 		float nodeSurfaceArea = AABBSurfaceArea(node->bound);
@@ -116,16 +130,19 @@ namespace NPBVHHelper
 					uint32 step = 1;
 					if (i == 1)
 					{
-						startBin = BVH_SAH_BIN_N - 1;
-						endBin = BVH_SAH_BIN_N / 2 - 1;
+						startBin = BVH_SAH_BIN_N;
+						endBin = BVH_SAH_BIN_N / 2;
 						step = -1;
 					}
 					uint32 mainAccumN = 0;
 					NPRayHelper::AABBBox mainAccumBound(NPMathHelper::Vec3(M_INF, M_INF, M_INF), NPMathHelper::Vec3(M_MIN_INF, M_MIN_INF, M_MIN_INF));
 					for (uint32 j = startBin; j != endBin; j += step)
 					{
-						mainAccumN += binData[j].triN;
-						mainAccumBound = mainAccumBound.merge(binData[j].centroidBound);
+						if (j >= 0 && j < BVH_SAH_BIN_N)
+						{
+							mainAccumN += binData[j].triN;
+							mainAccumBound = mainAccumBound.merge(binData[j].centroidBound);
+						}
 
 						uint32 opN = 0;
 						NPRayHelper::AABBBox opBount(NPMathHelper::Vec3(M_INF, M_INF, M_INF), NPMathHelper::Vec3(M_MIN_INF, M_MIN_INF, M_MIN_INF));
@@ -134,27 +151,39 @@ namespace NPBVHHelper
 							opN += binData[k].triN;
 							opBount = opBount.merge(binData[k].centroidBound);
 						}
-						binHeu[j] = 0.125f + (mainAccumN * AABBSurfaceArea(mainAccumBound) + opN * AABBSurfaceArea(opBount)) / nodeSurfaceArea;
+						if ( i == 0 )
+							binHeu[j] = 0.125f + (mainAccumN * AABBSurfaceArea(mainAccumBound) + opN * AABBSurfaceArea(opBount)) / nodeSurfaceArea;
+						else
+							binHeu[j-1] = 0.125f + (mainAccumN * AABBSurfaceArea(mainAccumBound) + opN * AABBSurfaceArea(opBount)) / nodeSurfaceArea;
+						//std::cout << "binHeu[" << j << "] = " << binHeu[j] << ": " << mainAccumN << ", " << AABBSurfaceArea(mainAccumBound) << ", " << opN << ", " 
+						//	<< AABBSurfaceArea(opBount) << ", " << nodeSurfaceArea << std::endl;
 					}
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, 2), f);
 		}
+		//std::cout << "Heu Data = ";
+		//for (uint32 i = 0; i < BVH_SAH_BIN_N; i++)
+		//{
+		//	std::cout << binHeu[i] << ", ";
+		//}
+		//std::cout << std::endl;
 
 		//Choose the best splitting bin
 		float minBinCost = M_INF;
 		float minBinN = BVH_SAH_BIN_N - 1;
 		for (uint32 i = 0; i < BVH_SAH_BIN_N; i++)
 		{
-			if (binHeu[i] <= minBinCost)
+			if (binHeu[i] < minBinCost)
 			{
 				minBinCost = binHeu[i];
 				minBinN = i;
 			}
 		}
+		//std::cout << "MinBin N = " << minBinN << std::endl;
 
 		//If leaf node is more efficient
-		if (minBinN == BVH_SAH_BIN_N - 1)
+		if (minBinN >= BVH_SAH_BIN_N)
 			return InitialBVHLeafNode(node, triStart, triN);
 
 		//re order tri order
