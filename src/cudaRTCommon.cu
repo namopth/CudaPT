@@ -280,26 +280,24 @@ __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3)
 	return make_float3(vec3._x, vec3._y, vec3._z);
 }
 
-__device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures, float4 &diff, float3 &ambient, float3 &specular, float3 &emissive)
+__device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures
+	,float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness, float &ior)
 {
-	ambient = V32F3(mat->ambient);
 	if (mat->diffuseTexId >= 0)
 	{
 		float4 texValue = tex2D<float4>(textures[mat->diffuseTexId].texObj, uv.x, uv.y);
-		diff = texValue;//vecMul(diff, texValue);
+		diff = make_float3(texValue.x, texValue.y, texValue.z);
+		trans = texValue.w*mat->transparency;
 	}
 	else
 	{
-		diff = make_float4(mat->diffuse._x, mat->diffuse._y, mat->diffuse._z, 1.0f);
+		diff = V32F3(mat->diffuse);
+		trans = mat->transparency;
 	}
-	if (mat->specularTexId >= 0)
+	if (mat->normalTexId >= 0)
 	{
-		float4 texValue = tex2D<float4>(textures[mat->specularTexId].texObj, uv.x, uv.y);
-		specular = make_float3(texValue.x, texValue.y, texValue.z);
-	}
-	else
-	{
-		specular = V32F3(mat->specular);
+		float4 texValue = tex2D<float4>(textures[mat->normalTexId].texObj, uv.x, uv.y);
+		normal = make_float3(texValue.x, texValue.y, texValue.z);
 	}
 	if (mat->emissiveTexId >= 0)
 	{
@@ -310,6 +308,10 @@ __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const 
 	{
 		emissive = V32F3(mat->emissive);
 	}
+	specular = mat->specularity;
+	metallic = mat->metallic;
+	roughness = mat->roughness;
+	ior = mat->ior;
 }
 
 template<class T, int dim, enum cudaTextureReadMode readMode>
@@ -376,7 +378,7 @@ void freeAllBVHCudaMem()
 	g_bIsCudaInit = false;
 }
 
-void initAllBVHCudaMem(RTScene* scene)
+void initAllSceneCudaMem(RTScene* scene)
 {
 	if (g_bIsCudaInit)
 	{
@@ -480,5 +482,27 @@ void initAllBVHCudaMem(RTScene* scene)
 	BindCudaTexture(&g_triIntersectionData, g_devTriIntersectionData, sizeof(float4) * triSize * 3);
 
 	g_bIsCudaInit = true;
-	scene->SetIsCudaDirty();
+	scene->SetIsCudaDirty(false);
+	scene->SetIsCudaMaterialDirty(false);
+}
+
+void updateAllSceneMaterialsCudaMem(RTScene* scene)
+{
+	if (!g_bIsCudaInit && !g_devMaterials)
+		return;
+
+	RTMaterial* tempMaterials = new RTMaterial[scene->m_pMaterials.size()];
+	{
+		auto f = [&](const tbb::blocked_range< int >& range) {
+			for (unsigned int i = range.begin(); i < range.end(); i++)
+			{
+				tempMaterials[i] = scene->m_pMaterials[i];
+			}
+		};
+		tbb::parallel_for(tbb::blocked_range< int >(0, scene->m_pMaterials.size()), f);
+	}
+
+	HANDLE_ERROR(cudaMemcpy(g_devMaterials, tempMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size(), cudaMemcpyHostToDevice));
+	DEL_ARRAY(tempMaterials);
+	scene->SetIsCudaMaterialDirty(false);
 }

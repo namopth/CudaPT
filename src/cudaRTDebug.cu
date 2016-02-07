@@ -14,7 +14,7 @@ namespace cudaRTDebug
 
 	struct ShootRayResult
 	{
-		float4 light;
+		float3 light;
 	};
 
 	__device__ ShootRayResult ptDebug_normalRay(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures)
@@ -38,11 +38,14 @@ namespace cudaRTDebug
 			float3 n2 = V32F3(v2->norm);
 			float3 norm = n0 * traceResult.w + n1 * traceResult.u + n2 * traceResult.v;
 
-			float4 diff;
-			float3 ambient;
-			float3 specular;
+			float3 diff;
 			float3 emissive;
-			GetMaterialColors(mat, uv, textures, diff, ambient, specular, emissive);
+			float trans;
+			float specular;
+			float metallic;
+			float roughness;
+			float ior;
+			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness, ior);
 
 			float3 w = norm;
 			float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
@@ -55,7 +58,6 @@ namespace cudaRTDebug
 			rayResult.light.x = 1.f;
 			rayResult.light.y = 1.f;
 			rayResult.light.z = 1.f;
-			rayResult.light.w = 1.f;
 		}
 
 		return rayResult;
@@ -101,7 +103,11 @@ namespace cudaRTDebug
 
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
-			initAllBVHCudaMem(scene);
+			initAllSceneCudaMem(scene);
+		}
+		else if (scene->GetIsCudaMaterialDirty())
+		{
+			updateAllSceneMaterialsCudaMem(scene);
 		}
 
 		if (!g_bIsCudaInit)

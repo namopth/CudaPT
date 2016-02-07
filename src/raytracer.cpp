@@ -207,16 +207,14 @@ void AssimpProcessSceneMaterial(RTScene* mainScene, const aiScene* scene, std::s
 		float aiFloat;
 		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_DIFFUSE, aiColor))
 			ourMat.diffuse = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
-		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_SPECULAR, aiColor))
-			ourMat.specular = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
 		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_AMBIENT, aiColor))
-			ourMat.ambient = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
-		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, aiColor))
 			ourMat.emissive = NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
+		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, aiColor))
+			ourMat.emissive = ourMat.emissive + NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
 		if (AI_SUCCESS == material->Get(AI_MATKEY_OPACITY, aiFloat))
-			ourMat.opacity = aiFloat;
+			ourMat.transparency = aiFloat;
 		ourMat.diffuseTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_DIFFUSE);
-		ourMat.specularTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_SPECULAR);
+		ourMat.normalTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_NORMALS);
 		ourMat.emissiveTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_EMISSIVE);
 
 		mainScene->m_pMaterials.push_back(ourMat);
@@ -236,6 +234,7 @@ bool RTScene::AddModel(const char* filename)
 	std::string dir = sPath.substr(0, sPath.find_last_of('\\'));
 	AssimpProcessNode(this, scene->mRootNode, scene);
 	AssimpProcessSceneMaterial(this, scene, dir);
+	updateTWBar();
 
 	std::vector<uint32> tris;
 	for (auto &tri : m_pTriangles)
@@ -266,15 +265,69 @@ bool RTScene::AddModel(const char* filename)
 	return m_compactBVH.InitialCompactBVH(&m_bvhRootNode);
 }
 
+void RTScene::UpdateMaterialsDirtyFlag()
+{
+	if (!m_bIsCudaMaterialDirty)
+	{
+		if (m_pLastMaterials.size() != m_pMaterials.size())
+		{
+			m_bIsCudaMaterialDirty = true;
+			m_pLastMaterials.clear();
+			for (uint32 i = 0; i < m_pMaterials.size(); i++)
+			{
+				m_pLastMaterials.push_back(m_pMaterials[i]);
+			}
+		}
+		else
+		{
+			for (uint32 i = 0; i < m_pMaterials.size(); i++)
+			{
+				if (m_pMaterials[i] != m_pLastMaterials[i])
+				{
+					m_pLastMaterials[i] = m_pMaterials[i];
+					m_bIsCudaMaterialDirty = true;
+				}
+			}
+		}
+	}
+}
+
+void RTScene::updateTWBar()
+{
+	if (m_pMaterialBar)
+	{
+		TwRemoveAllVars(m_pMaterialBar);
+	}
+	else
+	{
+		m_pMaterialBar = TwNewBar("Material Setting");
+	}
+
+	for (uint32 i = 0; i < m_pMaterials.size(); i++)
+	{
+		std::string matName = "mat" + std::to_string(i);
+		std::string matPara = "group='" + matName + "'";
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Diffuse" + matName).c_str(), TW_TYPE_COLOR3F, m_pMaterials[i].diffuse._e, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveR" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._x, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveG" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._y, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveB" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._z, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Transparency" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].transparency, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Specularity" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].specularity, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Metallic" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].metallic, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Roughness" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].roughness, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("IOR" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].ior, matPara.c_str()));
+	}
+}
+
 RTRenderer::RTRenderer()
 	: m_pResult(0)
 	, m_pScene(0)
 	, m_renderer(RENDERER_MODE_CPU_DEBUG)
 	, m_pRenderBar(nullptr)
-	, m_pMaterialBar(nullptr)
 {
 
 }
+
 RTRenderer::~RTRenderer()
 {
 	if (m_pResult)
@@ -322,6 +375,8 @@ bool RTRenderer::Init(const unsigned int width, const unsigned int height)
 
 bool RTRenderer::Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene &scene)
 {
+	scene.UpdateMaterialsDirtyFlag();
+
 	switch(m_renderer) {
 	case RENDERER_MODE_CPU_DEBUG:
 		return renderCPU(camPos, camDir, camUp, fov, scene);

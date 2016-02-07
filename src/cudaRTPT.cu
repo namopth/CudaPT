@@ -18,7 +18,7 @@ namespace cudaRTPT
 
 	struct ShootRayResult
 	{
-		float4 light;
+		float3 light;
 	};
 
 	template <int depth = 0>
@@ -27,7 +27,7 @@ namespace cudaRTPT
 		ShootRayResult rayResult;
 		if (depth > 5)
 		{
-			rayResult.light = make_float4(0.f, 0.f, 0.f, 1.f);
+			rayResult.light = make_float3(0.f, 0.f, 0.f);
 			return rayResult;
 		}
 
@@ -48,14 +48,16 @@ namespace cudaRTPT
 			float3 n2 = V32F3(v2->norm);
 			float3 norm = n0 * traceResult.w + n1 * traceResult.u + n2 * traceResult.v;
 
-			float4 diff;
-			float3 ambient;
-			float3 specular;
+			float3 diff;
 			float3 emissive;
-			GetMaterialColors(mat, uv, textures, diff, ambient, specular, emissive);
-			float4 shadeResult;
+			float trans;
+			float specular;
+			float metallic;
+			float roughness;
+			float ior;
+			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness, ior);
+			float3 shadeResult;
 
-			if (mat->matType == RTMAT_TYPE_DIFFUSE)
 			{
 				float r1 = 2.f * M_PI * curand_uniform(randstate);
 				float r2 = curand_uniform(randstate);
@@ -67,15 +69,7 @@ namespace cudaRTPT
 				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
 				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 				float cosine = vecDot(norm, refDir);
-				shadeResult = cosine * vecMul(diff, nextRayResult.light) + make_float4(emissive.x, emissive.y, emissive.z, 0.f) + make_float4(ambient.x, ambient.y, ambient.z, 0.f);
-			}
-			else if (mat->matType == RTMAT_TYPE_SPECULAR)
-			{
-
-			}
-			else if (mat->matType == RTMAT_TYPE_REFRACT)
-			{
-
+				shadeResult = cosine * vecMul(diff, nextRayResult.light) + emissive;
 			}
 
 			rayResult.light = shadeResult;
@@ -85,7 +79,6 @@ namespace cudaRTPT
 			rayResult.light.x = 1.f;
 			rayResult.light.y = 1.f;
 			rayResult.light.z = 1.f;
-			rayResult.light.w = 1.f;
 		}
 
 		return rayResult;
@@ -97,7 +90,6 @@ namespace cudaRTPT
 	{
 		ShootRayResult rayResult;
 		rayResult.light.x = rayResult.light.y = rayResult.light.z = 0.f;
-		rayResult.light.w = 1.0f;
 		return rayResult;
 	}
 
@@ -165,7 +157,12 @@ namespace cudaRTPT
 		{
 			g_matLastCamMat = g_matCurCamMat;
 			g_uCurFrameN = 0;
-			initAllBVHCudaMem(scene);
+			initAllSceneCudaMem(scene);
+		}
+		else if (scene->GetIsCudaMaterialDirty())
+		{
+			updateAllSceneMaterialsCudaMem(scene);
+			g_uCurFrameN = 0;
 		}
 
 		if (!g_bIsCudaInit)

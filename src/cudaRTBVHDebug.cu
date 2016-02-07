@@ -157,7 +157,7 @@ namespace cudaRTBVHDebug
 		
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
-			initAllBVHCudaMem(scene);
+			initAllSceneCudaMem(scene);
 		}
 
 		if (!g_bIsCudaInit)

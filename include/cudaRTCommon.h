@@ -78,7 +78,8 @@ __device__ bool TraceCost(const CURay &ray, uint& result, bool& isLeaf, const fl
 __hd__ float4 V32F4(const NPMathHelper::Vec3& vec3);
 __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3);
 
-__device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures, float4 &diff, float3 &ambient, float3 &specular, float3 &emissive);
+__device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures,
+	float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness, float &ior);
 
 template<class T, int dim, enum cudaTextureReadMode readMode>
 void BindCudaTexture(texture<T, dim, readMode> *tex, void* data, size_t size, uint32 filterMode = cudaFilterModePoint);
@@ -87,5 +88,6 @@ CURTTexture CreateCURTTexture(const RTTexture &cpuTex);
 
 void freeAllBVHCudaMem();
 
-void initAllBVHCudaMem(RTScene* scene);
+void initAllSceneCudaMem(RTScene* scene);
+void updateAllSceneMaterialsCudaMem(RTScene* scene);
 #endif

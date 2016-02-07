@@ -41,22 +41,42 @@ enum RTMAT_TYPE
 struct RTMaterial
 {
 	NPMathHelper::Vec3 diffuse;
-	NPMathHelper::Vec3 ambient;
-	NPMathHelper::Vec3 specular;
 	NPMathHelper::Vec3 emissive;
-	float opacity;
 	int32 diffuseTexId;
-	int32 specularTexId;
+	int32 normalTexId;
 	int32 emissiveTexId;
 	RTMAT_TYPE matType;
 
+	float transparency;
+	float specularity;
+	float metallic;
+	float roughness;
+	float ior;
+
 	RTMaterial() 
-		: diffuse(1.0f, 1.0f, 1.0f), ambient(1.0f, 1.0f, 1.0f)
-		, specular(1.0f, 1.0f, 1.0f), emissive(1.0f, 1.0f, 1.0f)
-		, opacity(1.0f)
-		, diffuseTexId(-1), specularTexId(-1), emissiveTexId(-1)
-		, matType(RTMAT_TYPE_DIFFUSE) 
+		: diffuse(1.0f, 1.0f, 1.0f), emissive(1.0f, 1.0f, 1.0f)
+		, diffuseTexId(-1), normalTexId(-1), emissiveTexId(-1)
+		, matType(RTMAT_TYPE_DIFFUSE)
+		, transparency(1.0f)
+		, specularity(0.5f)
+		, metallic(0.f)
+		, roughness(0.5f)
+		, ior(1.0f)
 	{}
+
+	bool operator==(const RTMaterial& rhs)
+	{
+		return (diffuse == rhs.diffuse) && (emissive == rhs.emissive)
+			&& (diffuseTexId == rhs.diffuseTexId) && (normalTexId == rhs.normalTexId)
+			&& (emissiveTexId == rhs.emissiveTexId) && (matType == rhs.matType)
+			&& (transparency == rhs.transparency) && (specularity == rhs.specularity)
+			&& (metallic == rhs.metallic) && (roughness == rhs.roughness)
+			&& (ior == rhs.ior);
+	}
+	bool operator!=(const RTMaterial& rhs)
+	{
+		return !(*this == rhs);
+	}
 };
 
 struct RTTexture
@@ -87,27 +107,35 @@ public:
 		unsigned int objId;
 		unsigned int subObjId;
 	};
-	RTScene() : m_bIsCudaDirty(true)
+	RTScene() : m_bIsCudaDirty(true), m_bIsCudaMaterialDirty(true), m_pMaterialBar(nullptr)
 	{}
 
 	inline const NPBVHHelper::CompactBVH* GetCompactBVH() const { return &m_compactBVH; }
 	inline const std::vector<NPMathHelper::Vec3>* GetTriIntersectData() const { return &m_triIntersectData; }
 	inline bool GetIsCudaDirty() const { return m_bIsCudaDirty; }
-	inline void SetIsCudaDirty(bool dirty = false) { m_bIsCudaDirty = dirty; }
+	inline void SetIsCudaDirty(const bool dirty = false) { m_bIsCudaDirty = dirty; }
+	inline bool GetIsCudaMaterialDirty() const { return m_bIsCudaMaterialDirty; }
+	inline void SetIsCudaMaterialDirty(const bool dirty = false) { m_bIsCudaMaterialDirty = dirty; }
 
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
 	bool AddModel(const char* filename);
+	void UpdateMaterialsDirtyFlag();
 
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;
 	std::vector<RTMaterial> m_pMaterials;
 	std::vector<std::pair<std::string,RTTexture>> m_pTextures;
 protected:
-	std::vector<NPRayHelper::Sphere> m_vSpheres;
+	std::vector<RTMaterial> m_pLastMaterials;
+	void updateTWBar();
+
 	NPBVHHelper::BVHNode m_bvhRootNode;
 	NPBVHHelper::CompactBVH m_compactBVH;
 	std::vector<NPMathHelper::Vec3> m_triIntersectData;
 	bool m_bIsCudaDirty;
+	bool m_bIsCudaMaterialDirty;
+
+	TwBar* m_pMaterialBar;
 };
 
 class RTRenderer
@@ -141,6 +169,5 @@ protected:
 	unsigned int m_uSizeH;
 
 	TwBar* m_pRenderBar;
-	TwBar* m_pMaterialBar;
 };
 #endif
