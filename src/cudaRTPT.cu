@@ -59,15 +59,24 @@ namespace cudaRTPT
 			float3 shadeResult;
 
 			{
-				float r1 = 2.f * M_PI * curand_uniform(randstate);
-				float r2 = curand_uniform(randstate);
-				float r2s = sqrtf(r2);
 				float3 w = norm;
 				float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
 				float3 v = vecCross(w, u);
-				float3 refDir = normalize(u*cosf(r1)*r2s + v*sinf(r1)*r2s + w*sqrtf(1.f - r2));
+				u = vecCross(v, w);
+
+				//float r1 = 2.f * M_PI * curand_uniform(randstate);
+				//float r2 = curand_uniform(randstate);
+				//float r2s = sqrtf(r2);
+				//float3 refDir = normalize(u*cosf(r1)*r2s + v*sinf(r1)*r2s + w*sqrtf(1.f - r2));
+
+				float r1 = 2.f * M_PI * curand_uniform(randstate);
+				float r2 = 0.5f * M_PI * curand_uniform(randstate);
+				float r2sin = sinf(r2);
+				float3 refDir = normalize(w * cosf(r2) + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
+
 				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
 				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+				nextRayResult.light = nextRayResult.light * M_PI;
 				float cosine = vecDot(norm, refDir);
 				shadeResult = cosine * vecMul(diff, nextRayResult.light) + emissive;
 			}
