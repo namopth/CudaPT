@@ -281,7 +281,8 @@ __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3)
 }
 
 __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures
-	,float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness, float &ior)
+	,float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness
+	, float &anisotropic, float &sheen, float &sheenTint, float &clearcoat, float &clearcoatGloss)
 {
 	if (mat->diffuseTexId >= 0)
 	{
@@ -297,7 +298,7 @@ __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const 
 	if (mat->normalTexId >= 0)
 	{
 		float4 texValue = tex2D<float4>(textures[mat->normalTexId].texObj, uv.x, uv.y);
-		normal = make_float3(texValue.x, texValue.y, texValue.z);
+		//normal = make_float3(texValue.x, texValue.y, texValue.z);
 	}
 	if (mat->emissiveTexId >= 0)
 	{
@@ -308,10 +309,14 @@ __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const 
 	{
 		emissive = V32F3(mat->emissive);
 	}
-	specular = mat->specularity;
+	specular = mat->specular;
 	metallic = mat->metallic;
 	roughness = mat->roughness;
-	ior = mat->ior;
+	anisotropic = mat->anisotropic;
+	sheen = mat->sheen;
+	sheenTint = mat->sheenTint;
+	clearcoat = mat->clearcoat;
+	clearcoatGloss = mat->clearcoatGloss;
 }
 
 template<class T, int dim, enum cudaTextureReadMode readMode>

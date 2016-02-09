@@ -79,7 +79,8 @@ __hd__ float4 V32F4(const NPMathHelper::Vec3& vec3);
 __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3);
 
 __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures,
-	float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness, float &ior);
+	float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness
+	, float &anisotropic, float &sheen, float &sheenTint, float &clearcoat, float &clearcoatGloss);
 
 template<class T, int dim, enum cudaTextureReadMode readMode>
 void BindCudaTexture(texture<T, dim, readMode> *tex, void* data, size_t size, uint32 filterMode = cudaFilterModePoint);

@@ -212,7 +212,7 @@ void AssimpProcessSceneMaterial(RTScene* mainScene, const aiScene* scene, std::s
 		if (AI_SUCCESS == material->Get(AI_MATKEY_COLOR_EMISSIVE, aiColor))
 			ourMat.emissive = ourMat.emissive + NPMathHelper::Vec3(aiColor.r, aiColor.g, aiColor.b);
 		if (AI_SUCCESS == material->Get(AI_MATKEY_OPACITY, aiFloat))
-			ourMat.transparency = aiFloat;
+			ourMat.transparency = 1.f - aiFloat;
 		ourMat.diffuseTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_DIFFUSE);
 		ourMat.normalTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_NORMALS);
 		ourMat.emissiveTexId = AssimpLoadTexture(mainScene, material, dir, aiTextureType_EMISSIVE);
@@ -312,10 +312,14 @@ void RTScene::updateTWBar()
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveG" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._y, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveB" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._z, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Transparency" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].transparency, matPara.c_str()));
-		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Specularity" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].specularity, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Specular" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].specular, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Metallic" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].metallic, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Roughness" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].roughness, matPara.c_str()));
-		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("IOR" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].ior, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Anisotropic" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].anisotropic, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Sheen" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].sheen, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("SheenTint" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].sheenTint, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Clearcoat" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoat, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("ClearcoatGloss" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoatGloss, matPara.c_str()));
 	}
 }
 

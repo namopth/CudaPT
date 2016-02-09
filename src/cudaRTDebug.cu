@@ -44,8 +44,13 @@ namespace cudaRTDebug
 			float specular;
 			float metallic;
 			float roughness;
-			float ior;
-			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness, ior);
+			float anisotropic;
+			float sheen;
+			float sheenTint;
+			float clearcoat;
+			float clearcoatGloss;
+			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness
+				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
 
 			float3 w = norm;
 			float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));

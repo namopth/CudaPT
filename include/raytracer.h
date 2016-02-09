@@ -48,20 +48,30 @@ struct RTMaterial
 	RTMAT_TYPE matType;
 
 	float transparency;
-	float specularity;
+	float subsurface;
+	float specular;
 	float metallic;
 	float roughness;
-	float ior;
+	float anisotropic;
+	float sheen;
+	float sheenTint;
+	float clearcoat;
+	float clearcoatGloss;
 
 	RTMaterial() 
 		: diffuse(1.0f, 1.0f, 1.0f), emissive(1.0f, 1.0f, 1.0f)
 		, diffuseTexId(-1), normalTexId(-1), emissiveTexId(-1)
 		, matType(RTMAT_TYPE_DIFFUSE)
-		, transparency(1.0f)
-		, specularity(0.5f)
+		, transparency(0.0f)
+		, subsurface(0.f)
+		, specular(0.5f)
 		, metallic(0.f)
 		, roughness(0.5f)
-		, ior(1.0f)
+		, anisotropic(0.f)
+		, sheen(0.f)
+		, sheenTint(0.f)
+		, clearcoat(0.f)
+		, clearcoatGloss(0.f)
 	{}
 
 	bool operator==(const RTMaterial& rhs)
@@ -69,9 +79,11 @@ struct RTMaterial
 		return (diffuse == rhs.diffuse) && (emissive == rhs.emissive)
 			&& (diffuseTexId == rhs.diffuseTexId) && (normalTexId == rhs.normalTexId)
 			&& (emissiveTexId == rhs.emissiveTexId) && (matType == rhs.matType)
-			&& (transparency == rhs.transparency) && (specularity == rhs.specularity)
+			&& (transparency == rhs.transparency) && (specular == rhs.specular)
 			&& (metallic == rhs.metallic) && (roughness == rhs.roughness)
-			&& (ior == rhs.ior);
+			&& (anisotropic == rhs.anisotropic) && (sheen == rhs.sheen)
+			&& (sheenTint == rhs.sheenTint) && (clearcoat == rhs.clearcoat)
+			&& (clearcoatGloss == rhs.clearcoatGloss) && (subsurface == rhs.subsurface);
 	}
 	bool operator!=(const RTMaterial& rhs)
 	{

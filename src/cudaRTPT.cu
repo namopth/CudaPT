@@ -1,7 +1,7 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 3
+#define NORMALRAY_BOUND_MAX 5
 namespace cudaRTPT
 {
 	CUDA_RT_COMMON_ATTRIBS_N(0)
@@ -32,7 +32,7 @@ namespace cudaRTPT
 		}
 
 		TracePrimitiveResult traceResult;
-		if (TracePrimitive(ray, traceResult))
+		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 		{
 			RTTriangle* tri = &triangles[traceResult.triId];
 			RTMaterial* mat = &materials[tri->matInd];
@@ -54,12 +54,65 @@ namespace cudaRTPT
 			float specular;
 			float metallic;
 			float roughness;
-			float ior;
-			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness, ior);
-			float3 shadeResult;
+			float anisotropic;
+			float sheen;
+			float sheenTint;
+			float clearcoat;
+			float clearcoatGloss;
+			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness
+				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
+			float3 shadeResult = make_float3(0.f,0.f,0.f);
+			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
 
+			float refrProb = curand_uniform(randstate);
+			float3 refrDir = ray.dir;
+			if (refrProb < trans)
 			{
-				float3 w = norm;
+				bool into = vecDot(nl, norm) > 0.f;
+				float nt = specular * 0.8f + 1.f;
+				float nc = 1.0f;
+				float nnt = into ? nc / nt : nt / nc;
+				float ddn = vecDot(nl, ray.dir);
+				float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
+				if (cos2t < 0.f)
+				{
+					float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
+					CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
+					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+					float cosine = vecDot(nl, refDir);
+					shadeResult = (cosine * nextRayResult.light) / trans + emissive;
+				}
+				else
+				{
+					refrDir = normalize(ray.dir * nnt - norm * ((into ? 1 : -1)*(ddn*nnt + sqrtf(cos2t))));
+					float a = nt - nc;
+					float b = nt + nc;
+					float r0 = a * a / (b * b);
+					float c = 1.f - (into ? -ddn : vecDot(refrDir, norm));
+					float re = r0 + (1.f - r0)*c*c*c*c*c;
+					float tr = 1.f - re;
+					float p = re;
+					float reflProb = curand_uniform(randstate);
+					if (reflProb < p)
+					{
+						float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
+						CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						float cosine = vecDot(nl, refDir);
+						shadeResult = (re * cosine * nextRayResult.light) / (trans * p) + emissive;
+					}
+					else
+					{
+						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						float cosine = vecDot(-1 * nl, refrDir);
+						shadeResult = (tr * cosine * nextRayResult.light) / (trans * (1.f - p)) + emissive;
+					}
+				}
+			}
+			else
+			{
+				float3 w = nl;
 				float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
 				float3 v = vecCross(w, u);
 				u = vecCross(v, w);
@@ -76,9 +129,9 @@ namespace cudaRTPT
 
 				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
 				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-				nextRayResult.light = nextRayResult.light * M_PI;
-				float cosine = vecDot(norm, refDir);
-				shadeResult = cosine * vecMul(diff, nextRayResult.light) + emissive;
+				nextRayResult.light = nextRayResult.light;
+				float cosine = vecDot(nl, refDir);
+				shadeResult = (M_PI * cosine * vecMul(diff, nextRayResult.light)) / (1 - trans) + emissive;
 			}
 
 			rayResult.light = shadeResult;
