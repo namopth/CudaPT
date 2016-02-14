@@ -1,12 +1,85 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 5
+#define NORMALRAY_BOUND_MAX 3
 namespace cudaRTPT
 {
 	CUDA_RT_COMMON_ATTRIBS_N(0)
 	CUDA_RT_COMMON_ATTRIBS_BGN
 	CUDA_RT_COMMON_ATTRIBS_END
+
+	__device__ float3 Diffuse_Lambert(float3 DiffuseColor)
+	{
+		return DiffuseColor * (1 / M_PI);
+	}
+
+	__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL)
+	{
+		float a = Roughness * Roughness;
+		float Vis_SmithV = NoL * (NoV * (1 - a) + a);
+		float Vis_SmithL = NoV * (NoL * (1 - a) + a);
+		return 0.5 * rcpf(Vis_SmithV + Vis_SmithL);
+		//float k = (Roughness * Roughness) / 2.0f; // (Roughness + 1) * (Roughness + 1) / 8.f;
+		//return (NoV / (NoV * (1 - k) + k))*(NoL / (NoL * (1 - k) + k));
+	}
+
+	__device__ float D_GGX(float Roughness, float NoH)
+	{
+		float m = Roughness * Roughness;
+		float m2 = m*m;
+		float d = (NoH * m2 - NoH) * NoH + 1;
+		return m2 / (M_PI*d*d);
+	}
+
+	__device__ float3 F_Schlick(float3 SpecularColor, float VoH)
+	{
+		float Fc = pow(1 - VoH, 5);
+		float firstTerm = saturate(50.0 * SpecularColor.z) * Fc;
+		return make_float3(firstTerm, firstTerm, firstTerm) + (1 - Fc) * SpecularColor;
+	}
+
+	__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
+	{
+		float a = Roughness * Roughness;
+		float Phi = 2 * M_PI * Xi.x;
+		float CosTheta = sqrt((1 - Xi.y) / (1 + (a*a - 1) * Xi.y));
+		float SinTheta = sqrt(1 - CosTheta * CosTheta);
+		float3 H;
+		H.x = SinTheta * cos(Phi);
+		H.y = SinTheta * sin(Phi);
+		H.z = CosTheta;
+		//float3 UpVector = abs(N.z) < 0.999 ? make_float3(0, 0, 1) : make_float3(1, 0, 0);
+		//float3 TangentX = normalize(vecCross(UpVector, N));
+		//float3 TangentY = vecCross(N, TangentX);
+
+		float3 w = N;
+		float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
+		float3 v = vecCross(w, u);
+		u = vecCross(v, w);
+
+		// Tangent to world space
+		return (u * H.x + v * H.y + w * H.z);
+	}
+
+	__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH)
+	{
+		return Diffuse_Lambert(DiffuseColor);
+	}
+
+	__device__ float Distribution(float Roughness, float NoH)
+	{
+		return D_GGX(Roughness, NoH);
+	}
+
+	__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH)
+	{
+		return Vis_SmithJointApprox(Roughness, NoV, NoL);
+	}
+
+	__device__ float3 Fresnel(float3 SpecularColor, float VoH)
+	{
+		return F_Schlick(SpecularColor, VoH);
+	}
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
@@ -63,7 +136,99 @@ namespace cudaRTPT
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
 			float3 shadeResult = make_float3(0.f,0.f,0.f);
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
+#define MICROFACET_MODEL
+#ifdef MICROFACET_MODEL
+			{
+				// Get some random microfacet
+				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(randstate), curand_uniform(randstate)), roughness, nl);
 
+				// Calculate flesnel
+				float voH = vecDot(-1 * ray.dir, hDir);
+				float3 f0 = vecLerp(0.08 * make_float3(specular, specular, specular), diff, metallic);
+				float3 brdf_f = Fresnel(f0, voH);
+
+				// Reflected or Refracted
+				float reflProb = lerp(length(brdf_f), 1.0f, metallic);
+				float refrProb = trans;
+				float3 reflDir;
+				float3 refrDir;
+
+				if (refrProb > 0)
+				{
+					bool into = vecDot(nl, norm) > 0.f;
+					float nt = specular * 0.8f + 1.f;
+					float nc = 1.0f;
+					float nnt = into ? nc / nt : nt / nc;
+					float ddn = vecDot(hDir, ray.dir);
+					float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
+					if (cos2t < 0.f)
+					{
+						refrProb = 0.f;
+					}
+					else
+					{
+						refrDir = normalize(ray.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
+					}
+				}
+
+				if (reflProb > 0)
+				{
+					reflDir = normalize(ray.dir - hDir * 2 * vecDot(hDir,ray.dir));
+					if (vecDot(reflDir, nl) < 0.f)
+						reflProb = 0.f;
+				}
+
+				// Reflected
+				if (reflProb > 0 && curand_uniform(randstate) < reflProb)
+				{
+					CURay nextRay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
+					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+					// Microfacet specular = D*G*F / (4*NoL*NoV)
+					// pdf = D * NoH / (4 * VoH)
+					// (G * F * VoH) / (NoV * NoH)
+					float VoH = vecDot(-1 * ray.dir, hDir);
+					float NoV = vecDot(nl, -1 * ray.dir);
+					float NoH = vecDot(nl, hDir);
+					float NoL = vecDot(nl, reflDir);
+					float G = GeometricVisibility(roughness, NoV, NoL, VoH);
+					shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
+				}
+
+				// Diffused or Transmited
+				else
+				{
+					// Transmited
+					if (refrProb > 0 && curand_uniform(randstate) < refrProb)
+					{
+						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						float cosine = vecDot(-1 * nl, refrDir);
+						shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
+					}
+					// Diffused
+					else
+					{
+						float3 w = nl;
+						float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
+						float3 v = vecCross(w, u);
+						u = vecCross(v, w);
+
+						float r1 = 2.f * M_PI * curand_uniform(randstate);
+						float r2cos = sqrtf(curand_uniform(randstate));
+						float r2sin = 1.f - r2cos*r2cos;
+						float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
+
+						CURay nextRay(ray.orig + traceResult.dist * ray.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+
+						float VoH = vecDot(-1 * ray.dir, hDir);
+						float NoV = vecDot(nl, -1 * ray.dir);
+						float NoL = vecDot(nl, diffDir);
+						shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
+					}
+				}
+			}
+#else
 			float refrProb = curand_uniform(randstate);
 			float3 refrDir = ray.dir;
 			if (refrProb < trans)
@@ -133,7 +298,7 @@ namespace cudaRTPT
 				float cosine = vecDot(nl, refDir);
 				shadeResult = (M_PI * cosine * vecMul(diff, nextRayResult.light)) / (1 - trans) + emissive;
 			}
-
+#endif
 			rayResult.light = shadeResult;
 		}
 		else

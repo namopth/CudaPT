@@ -100,6 +100,11 @@ inline float rsqrtf(float x)
 	return 1.0f / sqrtf(x);
 }
 
+inline __hd__ float saturate(float x)
+{
+	return (x < 0.f) ? 0.f : (x > 1.f) ? 1.f : x;
+}
+
 #endif
 
 typedef unsigned int uint;
@@ -120,6 +125,11 @@ inline __hd__ float rcpf(float x)
 #else
 	return 1.f / x;
 #endif
+}
+
+inline __hd__ float lerp(float x, float y, float d)
+{
+	return x + (y - x) * d;
 }
 
 // float3 - bgn
@@ -284,12 +294,14 @@ inline __hd__ float length(const float3& a)
 
 inline __hd__ float3 normalize(const float3& a)
 {
-#ifdef __CUDA_ARCH__ && USE_CUDA_INTRINSIC
-	return a * __fsqrt_rd(a.x * a.x + a.y * a.y + a.z * a.z);
-#else
 	return a / length(a);
-#endif
 }
+
+inline __hd__ float3 vecLerp(const float3& x, const float3& y, const float d)
+{
+	return x + (y - x) * d;
+}
+
 // float3 - end
 
 // float2 - bgn
