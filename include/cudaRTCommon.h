@@ -29,6 +29,7 @@
 
 extern texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 extern texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
+extern texture<float, 1, cudaReadModeElementType> g_bvhBoundsFacesArea;
 extern texture<float4, 1, cudaReadModeElementType> g_triIntersectionData;
 
 struct CURTTexture
@@ -47,6 +48,7 @@ extern RTTriangle* g_devTriangles;
 extern RTMaterial* g_devMaterials;
 extern float4* g_devBVHMinMaxBounds;
 extern uint1* g_devBVHOffsetTriStartN;
+extern float* g_devBVHBoundsFacesArea;
 extern float4* g_devTriIntersectionData;
 
 extern bool g_bIsCudaInit;

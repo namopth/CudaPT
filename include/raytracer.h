@@ -124,6 +124,7 @@ public:
 
 	inline const NPBVHHelper::CompactBVH* GetCompactBVH() const { return &m_compactBVH; }
 	inline const std::vector<NPMathHelper::Vec3>* GetTriIntersectData() const { return &m_triIntersectData; }
+	inline const std::vector<float>* GetTriArea() const { return &m_triArea; }
 	inline bool GetIsCudaDirty() const { return m_bIsCudaDirty; }
 	inline void SetIsCudaDirty(const bool dirty = false) { m_bIsCudaDirty = dirty; }
 	inline bool GetIsCudaMaterialDirty() const { return m_bIsCudaMaterialDirty; }
@@ -144,6 +145,7 @@ protected:
 	NPBVHHelper::BVHNode m_bvhRootNode;
 	NPBVHHelper::CompactBVH m_compactBVH;
 	std::vector<NPMathHelper::Vec3> m_triIntersectData;
+	std::vector<float> m_triArea;
 	bool m_bIsCudaDirty;
 	bool m_bIsCudaMaterialDirty;
 

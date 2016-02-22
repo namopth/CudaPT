@@ -4,6 +4,7 @@
 texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
 texture<float4, 1, cudaReadModeElementType> g_triIntersectionData;
+texture<float, 1, cudaReadModeElementType> g_bvhBoundsFacesArea;
 
 CURTTexture* g_devTextures = nullptr;
 std::vector<CURTTexture> g_cuRTTextures; // to CUFREE on CPU Side
@@ -13,6 +14,7 @@ RTTriangle* g_devTriangles = nullptr;
 RTMaterial* g_devMaterials = nullptr;
 float4* g_devBVHMinMaxBounds = nullptr;
 uint1* g_devBVHOffsetTriStartN = nullptr;
+float* g_devBVHBoundsFacesArea = nullptr;
 float4* g_devTriIntersectionData = nullptr;
 
 bool g_bIsCudaInit = false;
@@ -80,24 +82,25 @@ __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, c
 			make_float3(boundMax.x, boundMax.y, boundMax.z));
 		if (min >= 0 && min < minIntersect)
 		{
-			uint1 offOrTs = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2);
-			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
-			if (tN.x == 0)
+			uint1 off = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3);
+			uint1 tS = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3 + 1);
+			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3 + 2);
+			if (off.x != 0)
 			{
 				if (traceCmdPointer < BVH_DEPTH_MAX - 3)
 				{
 					traceCmd[++traceCmdPointer] = curInd + 1;
-					traceCmd[++traceCmdPointer] = curInd + offOrTs.x;
+					traceCmd[++traceCmdPointer] = curInd + off.x;
 				}
 			}
 			else
 			{
-				for (uint32 i = offOrTs.x; i < offOrTs.x + tN.x; i++)
+				for (uint32 i = tS.x; i < tS.x + tN.x; i++)
 				{
 					float _w, _u, _v;
-					float4 p0 = tex1Dfetch(g_triIntersectionData, i * 3);
-					float4 e0 = tex1Dfetch(g_triIntersectionData, i * 3 + 1);
-					float4 e1 = tex1Dfetch(g_triIntersectionData, i * 3 + 2);
+					float4 p0 = tex1Dfetch(g_triIntersectionData, i * 4);
+					float4 e0 = tex1Dfetch(g_triIntersectionData, i * 4 + 1);
+					float4 e1 = tex1Dfetch(g_triIntersectionData, i * 4 + 2);
 					float triIntersect = ray.IntersectTri(make_float3(p0.x, p0.y, p0.z),
 						make_float3(e0.x, e0.y, e0.z), make_float3(e1.x, e1.y, e1.z),
 						_w, _u, _v, rayEpsilon, cullback);
@@ -363,10 +366,12 @@ CURTTexture CreateCURTTexture(const RTTexture &cpuTex)
 
 void freeAllBVHCudaMem()
 {
-	HANDLE_ERROR(cudaUnbindTexture(g_bvhMinMaxBounds));
+	HANDLE_ERROR(cudaUnbindTexture(g_bvhMinMaxBounds)); 
 	HANDLE_ERROR(cudaUnbindTexture(g_bvhOffsetTriStartN));
+	HANDLE_ERROR(cudaUnbindTexture(g_bvhBoundsFacesArea));
 	HANDLE_ERROR(cudaUnbindTexture(g_triIntersectionData));
 	CUFREE(g_devBVHMinMaxBounds);
+	CUFREE(g_devBVHBoundsFacesArea);
 	CUFREE(g_devBVHOffsetTriStartN);
 	CUFREE(g_devTriIntersectionData);
 	CUFREE(g_devVertices);
@@ -413,14 +418,16 @@ void initAllSceneCudaMem(RTScene* scene)
 
 	uint triSize = scene->m_pTriangles.size();
 	RTTriangle* tempTriangles = new RTTriangle[triSize];
-	float4* tempTriIntersectionData = new float4[triSize * 3];
+	float4* tempTriIntersectionData = new float4[triSize * 4];
 	{
 		auto f = [&](const tbb::blocked_range< int >& range) {
 			for (unsigned int i = range.begin(); i < range.end(); i++)
 			{
-				tempTriIntersectionData[i * 3] = V32F4((*scene->GetTriIntersectData())[i * 3]);
-				tempTriIntersectionData[i * 3 + 1] = V32F4(((*scene->GetTriIntersectData())[i * 3 + 1] - (*scene->GetTriIntersectData())[i * 3]));
-				tempTriIntersectionData[i * 3 + 2] = V32F4(((*scene->GetTriIntersectData())[i * 3 + 2] - (*scene->GetTriIntersectData())[i * 3]));
+				tempTriIntersectionData[i * 4] = V32F4((*scene->GetTriIntersectData())[i * 4]);
+				tempTriIntersectionData[i * 4 + 1] = V32F4(((*scene->GetTriIntersectData())[i * 4 + 1] - (*scene->GetTriIntersectData())[i * 4]));
+				tempTriIntersectionData[i * 4 + 2] = V32F4(((*scene->GetTriIntersectData())[i * 4 + 2] - (*scene->GetTriIntersectData())[i * 4]));
+				tempTriIntersectionData[i * 4 + 3] = V32F4((*scene->GetTriIntersectData())[i * 4 + 3]);
+				tempTriIntersectionData[i * 4 + 3].w = (*scene->GetTriArea())[i];
 				tempTriangles[i] = scene->m_pTriangles[i];
 			}
 		};
@@ -440,15 +447,20 @@ void initAllSceneCudaMem(RTScene* scene)
 
 	uint bvhNodeN = scene->GetCompactBVH()->nodeN;
 	float4* tempBVHMinMaxBounds = new float4[bvhNodeN * 2];
-	uint1* tempBVHOffsetTriStartN = new uint1[bvhNodeN * 2];
+	uint1* tempBVHOffsetTriStartN = new uint1[bvhNodeN * 3];
+	float* tempBVHBoundsFacesArea = new float[bvhNodeN * 3];
 	{
 		auto f = [&](const tbb::blocked_range< int >& range) {
 			for (unsigned int i = range.begin(); i < range.end(); i++)
 			{
 				tempBVHMinMaxBounds[i * 2] = V32F4(scene->GetCompactBVH()->bounds[i].minPoint);
 				tempBVHMinMaxBounds[i * 2 + 1] = V32F4(scene->GetCompactBVH()->bounds[i].maxPoint);
-				tempBVHOffsetTriStartN[i * 2].x = scene->GetCompactBVH()->offOrTSTN[i * 2];
-				tempBVHOffsetTriStartN[i * 2 + 1].x = scene->GetCompactBVH()->offOrTSTN[i * 2 + 1];
+				tempBVHOffsetTriStartN[i * 3].x = scene->GetCompactBVH()->offTSTN[i * 3];
+				tempBVHOffsetTriStartN[i * 3 + 1].x = scene->GetCompactBVH()->offTSTN[i * 3 + 1];
+				tempBVHOffsetTriStartN[i * 3 + 2].x = scene->GetCompactBVH()->offTSTN[i * 3 + 2];
+				tempBVHBoundsFacesArea[i * 3] = scene->GetCompactBVH()->boundsFaceArea[i * 3];
+				tempBVHBoundsFacesArea[i * 3 + 1] = scene->GetCompactBVH()->boundsFaceArea[i * 3 + 1];
+				tempBVHBoundsFacesArea[i * 3 + 2] = scene->GetCompactBVH()->boundsFaceArea[i * 3 + 2];
 			}
 		};
 		tbb::parallel_for(tbb::blocked_range< int >(0, bvhNodeN), f);
@@ -459,20 +471,23 @@ void initAllSceneCudaMem(RTScene* scene)
 	HANDLE_ERROR(cudaMalloc((void**)&g_devMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size()));
 	HANDLE_ERROR(cudaMalloc((void**)&g_devTriangles, sizeof(RTTriangle) * triSize));
 	HANDLE_ERROR(cudaMalloc((void**)&g_devVertices, sizeof(RTVertex) * vertSize));
-	HANDLE_ERROR(cudaMalloc((void**)&g_devTriIntersectionData, sizeof(float4) * triSize * 3));
-	HANDLE_ERROR(cudaMalloc((void**)&g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2));
+	HANDLE_ERROR(cudaMalloc((void**)&g_devTriIntersectionData, sizeof(float4) * triSize * 4));
+	HANDLE_ERROR(cudaMalloc((void**)&g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 3));
 	HANDLE_ERROR(cudaMalloc((void**)&g_devBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2));
+	HANDLE_ERROR(cudaMalloc((void**)&g_devBVHBoundsFacesArea, sizeof(float) * bvhNodeN * 3));
 
 	// MemCpy Dev Data
 	HANDLE_ERROR(cudaMemcpy(g_devTextures, tempCURTTextures, sizeof(CURTTexture) * scene->m_pTextures.size(), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(g_devMaterials, tempMaterials, sizeof(RTMaterial) * scene->m_pMaterials.size(), cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(g_devTriangles, tempTriangles, sizeof(RTTriangle) * triSize, cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(g_devVertices, tempVertices, sizeof(RTVertex) * vertSize, cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(g_devTriIntersectionData, tempTriIntersectionData, sizeof(float4) * triSize * 3, cudaMemcpyHostToDevice));
-	HANDLE_ERROR(cudaMemcpy(g_devBVHOffsetTriStartN, tempBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2, cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(g_devTriIntersectionData, tempTriIntersectionData, sizeof(float4) * triSize * 4, cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(g_devBVHOffsetTriStartN, tempBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 3, cudaMemcpyHostToDevice));
 	HANDLE_ERROR(cudaMemcpy(g_devBVHMinMaxBounds, tempBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2, cudaMemcpyHostToDevice));
+	HANDLE_ERROR(cudaMemcpy(g_devBVHBoundsFacesArea, tempBVHBoundsFacesArea, sizeof(float) * bvhNodeN * 3, cudaMemcpyHostToDevice));
 
 	// Del Temp Data
+	DEL_ARRAY(tempBVHBoundsFacesArea);
 	DEL_ARRAY(tempBVHOffsetTriStartN);
 	DEL_ARRAY(tempBVHMinMaxBounds);
 	DEL_ARRAY(tempTriIntersectionData);
@@ -480,11 +495,12 @@ void initAllSceneCudaMem(RTScene* scene)
 	DEL_ARRAY(tempMaterials);
 	DEL_ARRAY(tempVertices);
 	DEL_ARRAY(tempCURTTextures);
-
+	
 	// Bind Dev Data To Texture
 	BindCudaTexture(&g_bvhMinMaxBounds, g_devBVHMinMaxBounds, sizeof(float4) * bvhNodeN * 2);
-	BindCudaTexture(&g_bvhOffsetTriStartN, g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 2);
-	BindCudaTexture(&g_triIntersectionData, g_devTriIntersectionData, sizeof(float4) * triSize * 3);
+	BindCudaTexture(&g_bvhOffsetTriStartN, g_devBVHOffsetTriStartN, sizeof(uint1) * bvhNodeN * 3);
+	BindCudaTexture(&g_triIntersectionData, g_devTriIntersectionData, sizeof(float4) * triSize * 4);
+	BindCudaTexture(&g_bvhBoundsFacesArea, g_devBVHBoundsFacesArea, sizeof(float) * bvhNodeN * 3);
 
 	g_bIsCudaInit = true;
 	scene->SetIsCudaDirty(false);
