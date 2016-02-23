@@ -5,83 +5,33 @@
 #define NORMALRAY_BOUND_MAX 3
 namespace cudaRTPTApprox
 {
+	unsigned char g_paraCheckSum;
+	NPAttrHelper::Attrib g_traceLimitDepth0("TraceLimitDepth0", -1);
+	NPAttrHelper::Attrib g_traceLimitTime0("TraceLimitTime0", BVH_TRACE_MAX);
+	NPAttrHelper::Attrib g_traceLimitDepth1("TraceLimitDepth1", -1);
+	NPAttrHelper::Attrib g_traceLimitTime1("TraceLimitTime1", BVH_TRACE_MAX);
+	NPAttrHelper::Attrib g_traceLimitDepth2("TraceLimitDepth2", -1);
+	NPAttrHelper::Attrib g_traceLimitTime2("TraceLimitTime2", BVH_TRACE_MAX);
 
-	CUDA_RT_COMMON_ATTRIBS_N(0)
+	CUDA_RT_COMMON_ATTRIBS_N(6)
 	CUDA_RT_COMMON_ATTRIBS_BGN
+	CUDA_RT_COMMON_ATTRIB_DECLARE(0, TraceLimitDepth0, g_traceLimitDepth0)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, TraceLimitTime0, g_traceLimitTime0)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(2, TraceLimitDepth1, g_traceLimitDepth1)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(3, TraceLimitTime1, g_traceLimitTime1)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(4, TraceLimitDepth2, g_traceLimitDepth2)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(5, TraceLimitTime2, g_traceLimitTime2)
 	CUDA_RT_COMMON_ATTRIBS_END
 
-	__device__ float3 Diffuse_Lambert(float3 DiffuseColor)
+	struct Parameters
 	{
-		return DiffuseColor * (1 / M_PI);
-	}
-
-	__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL)
-	{
-		float a = Roughness * Roughness;
-		float Vis_SmithV = NoL * (NoV * (1 - a) + a);
-		float Vis_SmithL = NoV * (NoL * (1 - a) + a);
-		return 0.5 * rcpf(Vis_SmithV + Vis_SmithL);
-		//float k = (Roughness * Roughness) / 2.0f; // (Roughness + 1) * (Roughness + 1) / 8.f;
-		//return (NoV / (NoV * (1 - k) + k))*(NoL / (NoL * (1 - k) + k));
-	}
-
-	__device__ float D_GGX(float Roughness, float NoH)
-	{
-		float m = Roughness * Roughness;
-		float m2 = m*m;
-		float d = (NoH * m2 - NoH) * NoH + 1;
-		return m2 / (M_PI*d*d);
-	}
-
-	__device__ float3 F_Schlick(float3 SpecularColor, float VoH)
-	{
-		float Fc = pow(1 - VoH, 5);
-		float firstTerm = saturate(50.0 * SpecularColor.z) * Fc;
-		return make_float3(firstTerm, firstTerm, firstTerm) + (1 - Fc) * SpecularColor;
-	}
-
-	__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
-	{
-		float a = Roughness * Roughness;
-		float Phi = 2 * M_PI * Xi.x;
-		float CosTheta = sqrt((1 - Xi.y) / (1 + (a*a - 1) * Xi.y));
-		float SinTheta = sqrt(1 - CosTheta * CosTheta);
-		float3 H;
-		H.x = SinTheta * cos(Phi);
-		H.y = SinTheta * sin(Phi);
-		H.z = CosTheta;
-		//float3 UpVector = abs(N.z) < 0.999 ? make_float3(0, 0, 1) : make_float3(1, 0, 0);
-		//float3 TangentX = normalize(vecCross(UpVector, N));
-		//float3 TangentY = vecCross(N, TangentX);
-
-		float3 w = N;
-		float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
-		float3 v = vecCross(w, u);
-		u = vecCross(v, w);
-
-		// Tangent to world space
-		return (u * H.x + v * H.y + w * H.z);
-	}
-
-	__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH)
-	{
-		return Diffuse_Lambert(DiffuseColor);
-	}
-
-	__device__ float Distribution(float Roughness, float NoH)
-	{
-		return D_GGX(Roughness, NoH);
-	}
-
-	__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH)
-	{
-		return Vis_SmithJointApprox(Roughness, NoV, NoL);
-	}
-
-	__device__ float3 Fresnel(float3 SpecularColor, float VoH)
-	{
-		return F_Schlick(SpecularColor, VoH);
-	}
+		uint32 traceLimitDepth0;
+		uint32 traceLimitDepth1;
+		uint32 traceLimitDepth2;
+		uint32 traceLimitTime0;
+		uint32 traceLimitTime1;
+		uint32 traceLimitTime2;
+	};
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
@@ -97,7 +47,7 @@ namespace cudaRTPTApprox
 	};
 
 	template <int depth = 0>
-	__device__ ShootRayResult pt0_normalRay(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
+	__device__ ShootRayResult pt0_normalRay(const Parameters para, const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
 	{
 		ShootRayResult rayResult;
 		if (depth > 5)
@@ -108,8 +58,24 @@ namespace cudaRTPTApprox
 
 		TracePrimitiveResult traceResult;
 #ifdef APPROX_TRACE
-		uint32 traceMaxTime = BVH_TRACE_MAX / (5*depth + 1);
-		if (TracePrimitiveWApprox(ray, traceResult, randstate, M_INF, M_FLT_BIAS_EPSILON, false, traceMaxTime))
+		uint32 traceMaxTime = BVH_TRACE_MAX;
+		uint32 traceMaxDepth = -1;
+		if(depth == 0)
+		{
+			traceMaxTime = para.traceLimitTime0;
+			traceMaxDepth = para.traceLimitDepth0;
+		}
+		else if (depth == 1)
+		{
+			traceMaxTime = para.traceLimitTime1;
+			traceMaxDepth = para.traceLimitDepth1;
+		}
+		else
+		{
+			traceMaxTime = para.traceLimitTime2;
+			traceMaxDepth = para.traceLimitDepth2;
+		}
+		if (TracePrimitiveWApprox(ray, traceResult, randstate, M_INF, M_FLT_BIAS_EPSILON, false, traceMaxTime, traceMaxDepth))
 #else
 		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 #endif
@@ -189,7 +155,7 @@ namespace cudaRTPTApprox
 				if (reflProb > 0 && curand_uniform(randstate) < reflProb)
 				{
 					CURay nextRay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
-					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 					// Microfacet specular = D*G*F / (4*NoL*NoV)
 					// pdf = D * NoH / (4 * VoH)
 					// (G * F * VoH) / (NoV * NoH)
@@ -208,7 +174,7 @@ namespace cudaRTPTApprox
 					if (refrProb > 0 && curand_uniform(randstate) < refrProb)
 					{
 						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 						float cosine = vecDot(-1 * nl, refrDir);
 						shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
 					}
@@ -226,7 +192,7 @@ namespace cudaRTPTApprox
 						float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
 						CURay nextRay(ray.orig + traceResult.dist * ray.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 
 						float VoH = vecDot(-1 * ray.dir, hDir);
 						float NoV = vecDot(nl, -1 * ray.dir);
@@ -250,7 +216,7 @@ namespace cudaRTPTApprox
 				{
 					float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
 					CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 					float cosine = vecDot(nl, refDir);
 					shadeResult = (cosine * nextRayResult.light) / trans + emissive;
 				}
@@ -269,14 +235,14 @@ namespace cudaRTPTApprox
 					{
 						float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
 						CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 						float cosine = vecDot(nl, refDir);
 						shadeResult = (re * cosine * nextRayResult.light) / (trans * p) + emissive;
 					}
 					else
 					{
 						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 						float cosine = vecDot(-1 * nl, refrDir);
 						shadeResult = (tr * cosine * nextRayResult.light) / (trans * (1.f - p)) + emissive;
 					}
@@ -300,7 +266,7 @@ namespace cudaRTPTApprox
 				float3 refDir = normalize(w * cosf(r2) + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
 				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(para, nextRay, vertices, triangles, materials, textures, randstate);
 				nextRayResult.light = nextRayResult.light;
 				float cosine = vecDot(nl, refDir);
 				shadeResult = (M_PI * cosine * vecMul(diff, nextRayResult.light)) / (1 - trans) + emissive;
@@ -319,7 +285,7 @@ namespace cudaRTPTApprox
 	}
 
 	template <>
-	__device__ ShootRayResult pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
+	__device__ ShootRayResult pt0_normalRay<NORMALRAY_BOUND_MAX>(const Parameters para, const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
 		, curandState *randstate)
 	{
 		ShootRayResult rayResult;
@@ -336,7 +302,7 @@ namespace cudaRTPTApprox
 		return a;
 	}
 
-	__global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
+	__global__ void pt0_kernel(const Parameters para, float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
 		float width, float height, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
 		, uint32 frameN, uint32 hashedFrameN, float* result, float* accResult)
 	{
@@ -357,7 +323,7 @@ namespace cudaRTPTApprox
 		float3 dir = normalize(camRight * u + camUp * v + camDir);
 		CURay ray(camPos, dir);
 
-		ShootRayResult rayResult = pt0_normalRay(ray, vertices, triangles, materials, textures, &randstate);
+		ShootRayResult rayResult = pt0_normalRay(para, ray, vertices, triangles, materials, textures, &randstate);
 
 		float resultInf = 1.f / (float)(frameN + 1);
 		float oldInf = 1.f - resultInf;
@@ -387,8 +353,12 @@ namespace cudaRTPTApprox
 		g_matCurCamMat = NPMathHelper::Mat4x4::lookAt(camPos, camPos + camDir, camUp);
 		g_uCurFrameN = (g_matLastCamMat != g_matCurCamMat) ? 0 : g_uCurFrameN + 1;
 
-		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
+		unsigned char checksum = *(g_traceLimitDepth0.GetUint()) ^ *(g_traceLimitDepth1.GetUint()) ^ *(g_traceLimitDepth2.GetUint()) 
+			^ *(g_traceLimitTime0.GetUint()) ^ *(g_traceLimitTime1.GetUint()) ^ *(g_traceLimitTime2.GetUint());
+
+		if (!g_bIsCudaInit || scene->GetIsCudaDirty() || g_paraCheckSum != checksum)
 		{
+			g_paraCheckSum = checksum;
 			g_matLastCamMat = g_matCurCamMat;
 			g_uCurFrameN = 0;
 			initAllSceneCudaMem(scene);
@@ -416,10 +386,18 @@ namespace cudaRTPTApprox
 		float3 f3CamDir = V32F3(camDir);
 		float3 f3CamRight = V32F3(camRight);
 
+		Parameters para;
+		para.traceLimitDepth0 = *g_traceLimitDepth0.GetUint();
+		para.traceLimitDepth1 = *g_traceLimitDepth1.GetUint();
+		para.traceLimitDepth2 = *g_traceLimitDepth2.GetUint();
+		para.traceLimitTime0 = *g_traceLimitTime0.GetUint();
+		para.traceLimitTime1 = *g_traceLimitTime1.GetUint();
+		para.traceLimitTime2 = *g_traceLimitTime2.GetUint();
+
 		// Kernel go here
 		dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 		dim3 grid(width / block.x, height / block.y, 1);
-		pt0_kernel << < grid, block >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
+		pt0_kernel << < grid, block >> > (para, f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
 			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devResultData, g_devAccResultData);
 
 		// Copy result to host

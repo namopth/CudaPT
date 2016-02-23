@@ -97,4 +97,14 @@ void freeAllBVHCudaMem();
 
 void initAllSceneCudaMem(RTScene* scene);
 void updateAllSceneMaterialsCudaMem(RTScene* scene);
+
+__device__ float3 Diffuse_Lambert(float3 DiffuseColor);
+__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL);
+__device__ float D_GGX(float Roughness, float NoH);
+__device__ float3 F_Schlick(float3 SpecularColor, float VoH);
+__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N);
+__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH);
+__device__ float Distribution(float Roughness, float NoH);
+__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH);
+__device__ float3 Fresnel(float3 SpecularColor, float VoH);
 #endif
