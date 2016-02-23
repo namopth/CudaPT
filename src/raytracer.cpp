@@ -262,13 +262,22 @@ bool RTScene::AddModel(const char* filename)
 		m_triIntersectData[i * 4 + 1] = m_pVertices[tempTriOrder[i].vertInd1].pos;
 		m_triIntersectData[i * 4 + 2] = m_pVertices[tempTriOrder[i].vertInd2].pos;
 
-		NPMathHelper::Vec3 edge1 = m_triIntersectData[i * 3 + 1] - m_triIntersectData[i * 3];
-		NPMathHelper::Vec3 edge2 = m_triIntersectData[i * 3 + 2] - m_triIntersectData[i * 3];
+		NPMathHelper::Vec3 edge1 = m_triIntersectData[i * 4 + 1] - m_triIntersectData[i * 4];
+		NPMathHelper::Vec3 edge2 = m_triIntersectData[i * 4 + 2] - m_triIntersectData[i * 4];
 		m_triIntersectData[i * 4 + 3] = edge1.cross(edge2).normalize();
 		float edge1L = edge1.length();
 		float edge2L = edge2.length();
 		float edgeDot = edge1.dot(edge2);
 		m_triArea[i] = 0.5f * sqrtf(edge1L * edge1L * edge2L * edge2L - edgeDot * edgeDot);
+
+		//std::cout << "vert1 : " << m_triIntersectData[i * 4]._x << ", " << m_triIntersectData[i * 4]._y << ", " << m_triIntersectData[i * 4]._z << ", " << std::endl;
+		//std::cout << "vert2 : " << m_triIntersectData[i * 4 + 1]._x << ", " << m_triIntersectData[i * 4 + 1]._y << ", " << m_triIntersectData[i * 4 + 1]._z << ", " << std::endl;
+		//std::cout << "vert3 : " << m_triIntersectData[i * 4 + 2]._x << ", " << m_triIntersectData[i * 4 + 2]._y << ", " << m_triIntersectData[i * 4 + 2]._z << ", " << std::endl;
+		//std::cout << "edgeL : " << edge1L << ", " << edge2L << std::endl;
+		//std::cout << "edgeDot : " << edgeDot << std::endl;
+		//std::cout << "edge1 : " << edge1._x << ", " << edge1._y << ", " << edge1._z << ", " << std::endl;
+		//std::cout << "edge2 : " << edge2._x << ", " << edge2._y << ", " << edge2._z << ", " << std::endl;
+		//std::cout << "triArea : " << m_triArea[i] << std::endl;
 	}
 	m_pTriangles = tempTriOrder;
 	SetIsCudaDirty(true);

@@ -26,6 +26,8 @@
 
 #define BVH_DEPTH_MAX 32
 #define BVH_TRACE_MAX 512
+#define APPROX_BVH_TRACE_TRI_MAX 10
+#define APPROX_BVH_TRACE_RAND_TRAVEL
 
 extern texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 extern texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
@@ -72,6 +74,8 @@ struct TracePrimitiveResult
 	float v;
 };
 
+__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, const bool cullback = true
+	, const int maxTraceBudget = BVH_TRACE_MAX, const int maxTraceDepth = -1);
 __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 __device__ bool TraceDepthParent(const CURay &ray, int& result, uint& parentId, const uint specDepth, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 __device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);

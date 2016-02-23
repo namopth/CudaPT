@@ -64,6 +64,158 @@ __hd__ float CURay::IntersectTri(const float3& _p0, const float3& _e0, const flo
 	return rT;
 }
 
+__device__ bool ApproxTracePrimitive(const CURay &ray, TracePrimitiveResult& result, const uint32 bvhIndex, curandState *randstate)
+{
+	uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, bvhIndex * 3 + 2);
+	tN.x = min(tN.x, APPROX_BVH_TRACE_TRI_MAX);
+	if (tN.x == 0)
+		return false;
+
+	uint1 off = tex1Dfetch(g_bvhOffsetTriStartN, bvhIndex * 3);
+	uint1 tS = tex1Dfetch(g_bvhOffsetTriStartN, bvhIndex * 3 + 1);
+	float area[3];
+	area[0] = tex1Dfetch(g_bvhBoundsFacesArea, bvhIndex * 3);
+	area[1] = tex1Dfetch(g_bvhBoundsFacesArea, bvhIndex * 3 + 1);
+	area[2] = tex1Dfetch(g_bvhBoundsFacesArea, bvhIndex * 3 + 2);
+	float bBproj = fabsf(area[0] * ray.dir.x) + fabsf(area[1] * ray.dir.y) + fabsf(area[2] * ray.dir.z);
+	float triProj[APPROX_BVH_TRACE_TRI_MAX];
+	float allTriProj = 0.f;
+	for (uint i = 0; i < tN.x; i++)
+	{
+		float4 triNormArea = tex1Dfetch(g_triIntersectionData, (tS.x + i) * 4 + 3);
+		float3 triNorm = make_float3(triNormArea.x, triNormArea.y, triNormArea.z);
+		float triArea = triNormArea.w;
+		triProj[i] = fabsf(triArea * vecDot(triNorm, ray.dir));
+		allTriProj += triProj[i];
+	}
+
+	float randValue = allTriProj*curand_uniform(randstate);
+	uint hitTri = tN.x;
+	for (uint i = 0; i < tN.x; i++)
+	{
+		if (randValue < triProj[i])
+		{
+			hitTri = i;
+			break;
+		}
+		randValue -= triProj[i];
+	}
+
+	if (hitTri == tN.x)
+		return false;
+
+
+	result.triId = hitTri + tS.x;
+	result.u = curand_uniform(randstate);
+	result.v = curand_uniform(randstate);
+	result.w = curand_uniform(randstate);
+
+	float4 p0 = tex1Dfetch(g_triIntersectionData, result.triId * 4);
+	float3 op0 = make_float3(p0.x, p0.y, p0.z) - ray.orig;
+	float op0L = length(op0);
+	result.dist = op0L * op0L / vecDot(ray.dir, op0);
+	return true;
+}
+
+__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const float maxDist
+	, const float rayEpsilon, const bool cullback, const int maxTraceBudget, const int maxTraceDepth)
+{
+	float minIntersect = maxDist;
+	uint32 tracedTriId = 0;
+	float w, u, v;
+	uint32 traceCmd[BVH_DEPTH_MAX];
+	uint32 depthCmd[BVH_DEPTH_MAX];
+	traceCmd[0] = 0;
+	depthCmd[0] = 0;
+	int32 traceCmdPointer = 0;
+	int depth = -1;
+	uint32 tracedTime = 0;
+	while (traceCmdPointer >= 0 && tracedTime++ < BVH_TRACE_MAX)
+	{
+		uint32 curCmdPointer = traceCmdPointer--;
+		uint32 curInd = traceCmd[curCmdPointer];
+		uint32 curDepth = depthCmd[curCmdPointer];
+		float4 boundMin = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2);
+		float4 boundMax = tex1Dfetch(g_bvhMinMaxBounds, curInd * 2 + 1);
+		float min = ray.IntersectAABB(make_float3(boundMin.x, boundMin.y, boundMin.z),
+			make_float3(boundMax.x, boundMax.y, boundMax.z));
+		if (min >= 0 && min < minIntersect)
+		{
+			if (tracedTime + traceCmdPointer >= maxTraceBudget || (maxTraceDepth >= 0 && curDepth > maxTraceDepth))
+			{
+				TracePrimitiveResult approxResult;
+				if (ApproxTracePrimitive(ray, approxResult, curInd, randstate) && approxResult.dist < minIntersect)
+				{
+					minIntersect = approxResult.dist;
+					tracedTriId = approxResult.triId;
+					w = approxResult.w; u = approxResult.u; v = approxResult.v;
+				}
+			}
+			else
+			{
+				uint1 off = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3);
+				uint1 tS = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3 + 1);
+				uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3 + 2);
+				if (off.x != 0)
+				{
+					if (traceCmdPointer < BVH_DEPTH_MAX - 3)
+					{
+#ifdef APPROX_BVH_TRACE_RAND_TRAVEL
+						if (curand_uniform(randstate) > 0.5f)
+						{
+#endif
+							traceCmd[++traceCmdPointer] = curInd + 1;
+							depthCmd[traceCmdPointer] = curDepth + 1;
+							traceCmd[++traceCmdPointer] = curInd + off.x;
+							depthCmd[traceCmdPointer] = curDepth + 1;
+#ifdef APPROX_BVH_TRACE_RAND_TRAVEL
+						}
+						else
+						{
+							traceCmd[++traceCmdPointer] = curInd + off.x;
+							depthCmd[traceCmdPointer] = curDepth + 1;
+							traceCmd[++traceCmdPointer] = curInd + 1;
+							depthCmd[traceCmdPointer] = curDepth + 1;
+						}
+#endif
+					}
+				}
+				else
+				{
+					for (uint32 i = tS.x; i < tS.x + tN.x; i++)
+					{
+						float _w, _u, _v;
+						float4 p0 = tex1Dfetch(g_triIntersectionData, i * 4);
+						float4 e0 = tex1Dfetch(g_triIntersectionData, i * 4 + 1);
+						float4 e1 = tex1Dfetch(g_triIntersectionData, i * 4 + 2);
+						float triIntersect = ray.IntersectTri(make_float3(p0.x, p0.y, p0.z),
+							make_float3(e0.x, e0.y, e0.z), make_float3(e1.x, e1.y, e1.z),
+							_w, _u, _v, rayEpsilon, cullback);
+						if (triIntersect >= 0 && triIntersect < minIntersect)
+						{
+							minIntersect = triIntersect;
+							tracedTriId = i;
+							w = _w; u = _u; v = _v;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (minIntersect < maxDist)
+	{
+		result.dist = minIntersect;
+		result.triId = tracedTriId;
+		result.w = w;
+		result.u = u;
+		result.v = v;
+		return true;
+	}
+
+	return false;
+}
+
 __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, const float maxDist, const float rayEpsilon, bool cullback)
 {
 	float minIntersect = maxDist;

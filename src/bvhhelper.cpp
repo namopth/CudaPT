@@ -77,6 +77,8 @@ namespace NPBVHHelper
 			node->boundFaceArea[0] = fabs(diaLength._y * diaLength._z);
 			node->boundFaceArea[1] = fabs(diaLength._x * diaLength._z);
 			node->boundFaceArea[2] = fabs(diaLength._y * diaLength._x);
+			//std::cout << "diaLength : " << diaLength._x << ", " << diaLength._y << ", " << diaLength._z << ", " << std::endl;
+			//std::cout << "faceArea : " << node->boundFaceArea[0] << ", " << node->boundFaceArea[1] << ", " << node->boundFaceArea[2] << ", " << std::endl;
 		}
 
 		//std::cout << "==node==" << std::endl;
