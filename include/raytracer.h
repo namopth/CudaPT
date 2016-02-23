@@ -1,5 +1,6 @@
 #ifdef RT_XGEN
-DEFINE_RT(Cuda Pathtracing, cudaRTPT)
+DEFINE_RT(Cuda PT, cudaRTPT)
+DEFINE_RT(Cuda PT Approx, cudaRTPTApprox)
 DEFINE_RT(Cuda Debug, cudaRTDebug)
 DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #endif

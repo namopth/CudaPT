@@ -114,7 +114,7 @@ __device__ bool ApproxTracePrimitive(const CURay &ray, TracePrimitiveResult& res
 	float3 op0 = make_float3(p0.x, p0.y, p0.z) - ray.orig;
 	float op0L = length(op0);
 	result.dist = op0L * op0L / vecDot(ray.dir, op0);
-	return true;
+	return (result.dist > M_EPSILON);
 }
 
 __device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const float maxDist

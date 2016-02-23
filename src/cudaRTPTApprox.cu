@@ -1,9 +1,9 @@
 #include "cudaRTCommon.h"
 
-//#define APPROX_TRACE
+#define APPROX_TRACE
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 3
-namespace cudaRTPT
+namespace cudaRTPTApprox
 {
 
 	CUDA_RT_COMMON_ATTRIBS_N(0)
