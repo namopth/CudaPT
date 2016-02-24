@@ -112,9 +112,9 @@ __device__ bool ApproxTracePrimitive(const CURay &ray, TracePrimitiveResult& res
 		return false;
 
 	result.triId = hitTri + tS.x;
-	result.u = 0.5f;//curand_uniform(randstate);
-	result.v = 0.5f;//curand_uniform(randstate);
-	result.w = 0.5f;//curand_uniform(randstate);
+	result.u = 1.f;//curand_uniform(randstate);
+	result.v = 0.f;//curand_uniform(randstate);
+	result.w = 0.f;
 	result.dist = minDist;
 	return true;
 

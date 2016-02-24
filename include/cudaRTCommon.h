@@ -26,7 +26,7 @@
 
 #define BVH_DEPTH_MAX 32
 #define BVH_TRACE_MAX 512
-#define APPROX_BVH_TRACE_TRI_MAX 10
+#define APPROX_BVH_TRACE_TRI_MAX 64
 #define APPROX_BVH_TRACE_RAND_TRAVEL
 
 extern texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
