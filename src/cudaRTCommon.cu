@@ -89,35 +89,65 @@ __device__ bool ApproxTracePrimitive(const CURay &ray, TracePrimitiveResult& res
 		allTriProj += triProj[i];
 	}
 
-	float randValue = allTriProj*curand_uniform(randstate);
+	float hittedValue = curand_uniform(randstate)*allTriProj;
+	float minDist = M_INF;
 	uint hitTri = tN.x;
 	for (uint i = 0; i < tN.x; i++)
 	{
-		if (randValue < triProj[i])
+		if (triProj[i] > hittedValue)
 		{
-			hitTri = i;
-			break;
+			float4 p0 = tex1Dfetch(g_triIntersectionData, (tS.x + i) * 4);
+			float3 op0 = make_float3(p0.x, p0.y, p0.z) - ray.orig;
+			float op0L = length(op0);
+			float dist = op0L * op0L / vecDot(ray.dir, op0);
+			if (dist > M_EPSILON && dist < minDist)
+			{
+				hitTri = i;
+				minDist = dist;
+			}
 		}
-		randValue -= triProj[i];
 	}
 
 	if (hitTri == tN.x)
 		return false;
 
-
 	result.triId = hitTri + tS.x;
-	result.u = curand_uniform(randstate);
-	result.v = curand_uniform(randstate);
-	result.w = curand_uniform(randstate);
+	result.u = 0.5f;//curand_uniform(randstate);
+	result.v = 0.5f;//curand_uniform(randstate);
+	result.w = 0.5f;//curand_uniform(randstate);
+	result.dist = minDist;
+	return true;
 
-	float4 p0 = tex1Dfetch(g_triIntersectionData, result.triId * 4);
-	float3 op0 = make_float3(p0.x, p0.y, p0.z) - ray.orig;
-	float op0L = length(op0);
-	result.dist = op0L * op0L / vecDot(ray.dir, op0);
-	return (result.dist > M_EPSILON);
+
+	//float randValue = allTriProj*curand_uniform(randstate);
+	//uint hitTri = tN.x;
+	//for (uint i = 0; i < tN.x; i++)
+	//{
+	//	if (randValue < triProj[i])
+	//	{
+	//		hitTri = i;
+	//		break;
+	//	}
+	//	randValue -= triProj[i];
+	//}
+
+	//if (hitTri == tN.x)
+	//	return false;
+
+
+	//result.triId = hitTri + tS.x;
+	//result.u = curand_uniform(randstate);
+	//result.v = curand_uniform(randstate);
+	//result.w = curand_uniform(randstate);
+
+	//float4 p0 = tex1Dfetch(g_triIntersectionData, result.triId * 4);
+	//float3 op0 = make_float3(p0.x, p0.y, p0.z) - ray.orig;
+	//float op0L = length(op0);
+	//result.dist = op0L * op0L / vecDot(ray.dir, op0);
+	//return (result.dist > M_EPSILON);
 }
 
-__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const float maxDist
+__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const uint seed, const float maxDist
 	, const float rayEpsilon, const bool cullback, const int maxTraceBudget, const int maxTraceDepth)
 {
 	float minIntersect = maxDist;
@@ -161,7 +191,7 @@ __device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& re
 					if (traceCmdPointer < BVH_DEPTH_MAX - 3)
 					{
 #ifdef APPROX_BVH_TRACE_RAND_TRAVEL
-						if (curand_uniform(randstate) > 0.5f)
+						if (seed & 1 == 1)//(curand_uniform(randstate) > 0.5f)
 						{
 #endif
 							traceCmd[++traceCmdPointer] = curInd + 1;

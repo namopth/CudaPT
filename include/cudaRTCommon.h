@@ -74,7 +74,7 @@ struct TracePrimitiveResult
 	float v;
 };
 
-__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, const bool cullback = true
+__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const uint seed, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, const bool cullback = true
 	, const int maxTraceBudget = BVH_TRACE_MAX, const int maxTraceDepth = -1);
 __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 __device__ bool TraceDepthParent(const CURay &ray, int& result, uint& parentId, const uint specDepth, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);

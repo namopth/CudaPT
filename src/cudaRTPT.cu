@@ -1,6 +1,5 @@
 #include "cudaRTCommon.h"
 
-//#define APPROX_TRACE
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 3
 namespace cudaRTPT
@@ -34,12 +33,7 @@ namespace cudaRTPT
 		}
 
 		TracePrimitiveResult traceResult;
-#ifdef APPROX_TRACE
-		uint32 traceMaxTime = BVH_TRACE_MAX / (5*depth + 1);
-		if (TracePrimitiveWApprox(ray, traceResult, randstate, M_INF, M_FLT_BIAS_EPSILON, false, traceMaxTime))
-#else
 		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
-#endif
 		{
 			RTTriangle* tri = &triangles[traceResult.triId];
 			RTMaterial* mat = &materials[tri->matInd];
