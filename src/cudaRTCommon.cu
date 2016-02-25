@@ -344,16 +344,15 @@ __device__ bool TraceDepthParent(const CURay &ray, int& result, uint& parentId, 
 				break;
 			}
 
-			uint1 offOrTs = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2);
-			uint1 tN = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 2 + 1);
-			if (tN.x == 0)
+			uint1 offset = tex1Dfetch(g_bvhOffsetTriStartN, curInd * 3);
+			if (offset.x != 0)
 			{
 				if (traceCmdPointer < BVH_DEPTH_MAX - 2)
 				{
 					traceCmd[++traceCmdPointer] = curInd + 1;
 					parentIdCmd[traceCmdPointer] = curInd;
 					depthCmd[traceCmdPointer] = curDepth + 1;
-					traceCmd[++traceCmdPointer] = curInd + offOrTs.x;
+					traceCmd[++traceCmdPointer] = curInd + offset.x;
 					parentIdCmd[traceCmdPointer] = curInd;
 					depthCmd[traceCmdPointer] = curDepth + 1;
 				}
