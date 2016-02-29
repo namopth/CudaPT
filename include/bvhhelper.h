@@ -15,12 +15,9 @@ namespace NPBVHHelper
 		uint32 triStart;
 		uint32 triN;
 		uint32 desN;
-		float boundFaceArea[3];
 		BVHNode() : triStart(0), triN(0), desN(0)
 			, bound(NPMathHelper::Vec3(M_INF, M_INF, M_INF), NPMathHelper::Vec3(M_MIN_INF, M_MIN_INF, M_MIN_INF))
-		{
-			childNodes[0] = childNodes[1] = 0; boundFaceArea[0] = boundFaceArea[1] = boundFaceArea[2] = 0.f;
-		}
+		{ childNodes[0] = childNodes[1] = 0; }
 
 		void Clear()
 		{
@@ -48,12 +45,11 @@ namespace NPBVHHelper
 	struct CompactBVH
 	{
 		NPRayHelper::AABBBox* bounds;
-		float* boundsFaceArea;
-		uint32* offTSTN;
+		uint32* offOrTSTN;
 		uint32 nodeN;
 
-		CompactBVH() : bounds(0), boundsFaceArea(0), offTSTN(0), nodeN(0) {}
-		bool IsValid() const { return (bounds && offTSTN && nodeN > 0); }
+		CompactBVH() : bounds(0), offOrTSTN(0), nodeN(0) {}
+		bool IsValid() const { return (bounds && offOrTSTN && nodeN > 0); }
 		bool InitialCompactBVH(const BVHNode* bvhRoot);
 	};
 }

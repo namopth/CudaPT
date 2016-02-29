@@ -26,12 +26,9 @@
 
 #define BVH_DEPTH_MAX 32
 #define BVH_TRACE_MAX 512
-#define APPROX_BVH_TRACE_TRI_MAX 64
-#define APPROX_BVH_TRACE_RAND_TRAVEL
 
 extern texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 extern texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
-extern texture<float, 1, cudaReadModeElementType> g_bvhBoundsFacesArea;
 extern texture<float4, 1, cudaReadModeElementType> g_triIntersectionData;
 
 struct CURTTexture
@@ -50,7 +47,6 @@ extern RTTriangle* g_devTriangles;
 extern RTMaterial* g_devMaterials;
 extern float4* g_devBVHMinMaxBounds;
 extern uint1* g_devBVHOffsetTriStartN;
-extern float* g_devBVHBoundsFacesArea;
 extern float4* g_devTriIntersectionData;
 
 extern bool g_bIsCudaInit;
@@ -74,8 +70,6 @@ struct TracePrimitiveResult
 	float v;
 };
 
-__device__ bool TracePrimitiveWApprox(const CURay &ray, TracePrimitiveResult& result, curandState *randstate, const uint seed, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, const bool cullback = true
-	, const int maxTraceBudget = BVH_TRACE_MAX, const int maxTraceDepth = -1);
 __device__ bool TracePrimitive(const CURay &ray, TracePrimitiveResult& result, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 __device__ bool TraceDepthParent(const CURay &ray, int& result, uint& parentId, const uint specDepth, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
 __device__ bool TraceDepth(const CURay &ray, uint& result, bool& isLeaf, const float maxDist = M_INF, const float rayEpsilon = M_EPSILON, bool cullback = true);
@@ -97,14 +91,4 @@ void freeAllBVHCudaMem();
 
 void initAllSceneCudaMem(RTScene* scene);
 void updateAllSceneMaterialsCudaMem(RTScene* scene);
-
-__device__ float3 Diffuse_Lambert(float3 DiffuseColor);
-__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL);
-__device__ float D_GGX(float Roughness, float NoH);
-__device__ float3 F_Schlick(float3 SpecularColor, float VoH);
-__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N);
-__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH);
-__device__ float Distribution(float Roughness, float NoH);
-__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH);
-__device__ float3 Fresnel(float3 SpecularColor, float VoH);
 #endif

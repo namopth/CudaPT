@@ -44,23 +44,23 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 			float min = m_compactBVH.bounds[curInd].intersect(r);
 			if (min >= 0 && min < minIntersect)
 			{
-				if (m_compactBVH.offTSTN[curInd * 3] != 0)
+				if (m_compactBVH.offOrTSTN[curInd * 2 + 1] == 0)
 				{
 					if (traceCmdPointer < 127)
 						traceCmd[++traceCmdPointer] = curInd + 1;
 					if (traceCmdPointer < 127)
-						traceCmd[++traceCmdPointer] = curInd + m_compactBVH.offTSTN[curInd * 3];
+						traceCmd[++traceCmdPointer] = curInd + m_compactBVH.offOrTSTN[curInd * 2];
 				}
 				else
 				{
-					uint32 triStart = m_compactBVH.offTSTN[curInd * 3 + 1];
-					uint32 triN = m_compactBVH.offTSTN[curInd * 3 + 2];
+					uint32 triStart = m_compactBVH.offOrTSTN[curInd * 2];
+					uint32 triN = m_compactBVH.offOrTSTN[curInd * 2 + 1];
 					for (uint32 i = triStart; i < triStart + triN; i++)
 					{
 						NPRayHelper::Tri tri;
-						tri.p0 = m_triIntersectData[i * 4];
-						tri.p1 = m_triIntersectData[i * 4 + 1];
-						tri.p2 = m_triIntersectData[i * 4 + 2];
+						tri.p0 = m_triIntersectData[i * 3];
+						tri.p1 = m_triIntersectData[i * 3 + 1];
+						tri.p2 = m_triIntersectData[i * 3 + 2];
 
 						NPMathHelper::Vec3 pos, norm;
 						float w, u, v;
@@ -252,32 +252,13 @@ bool RTScene::AddModel(const char* filename)
 	std::vector<uint32> reorderedTriOrder = NPBVHHelper::CreateBVH(&m_bvhRootNode, tris, verts);
 	std::vector<RTTriangle> tempTriOrder(reorderedTriOrder.size());
 	m_triIntersectData.clear();
-	m_triIntersectData.resize(reorderedTriOrder.size()*4);
-	m_triArea.clear();
-	m_triArea.resize(reorderedTriOrder.size());
+	m_triIntersectData.resize(reorderedTriOrder.size()*3);
 	for (uint32 i = 0; i < reorderedTriOrder.size(); i++)
 	{
 		tempTriOrder[i] = m_pTriangles[reorderedTriOrder[i]];
-		m_triIntersectData[i * 4] = m_pVertices[tempTriOrder[i].vertInd0].pos;
-		m_triIntersectData[i * 4 + 1] = m_pVertices[tempTriOrder[i].vertInd1].pos;
-		m_triIntersectData[i * 4 + 2] = m_pVertices[tempTriOrder[i].vertInd2].pos;
-
-		NPMathHelper::Vec3 edge1 = m_triIntersectData[i * 4 + 1] - m_triIntersectData[i * 4];
-		NPMathHelper::Vec3 edge2 = m_triIntersectData[i * 4 + 2] - m_triIntersectData[i * 4];
-		m_triIntersectData[i * 4 + 3] = edge1.cross(edge2).normalize();
-		float edge1L = edge1.length();
-		float edge2L = edge2.length();
-		float edgeDot = edge1.dot(edge2);
-		m_triArea[i] = 0.5f * sqrtf(edge1L * edge1L * edge2L * edge2L - edgeDot * edgeDot);
-
-		//std::cout << "vert1 : " << m_triIntersectData[i * 4]._x << ", " << m_triIntersectData[i * 4]._y << ", " << m_triIntersectData[i * 4]._z << ", " << std::endl;
-		//std::cout << "vert2 : " << m_triIntersectData[i * 4 + 1]._x << ", " << m_triIntersectData[i * 4 + 1]._y << ", " << m_triIntersectData[i * 4 + 1]._z << ", " << std::endl;
-		//std::cout << "vert3 : " << m_triIntersectData[i * 4 + 2]._x << ", " << m_triIntersectData[i * 4 + 2]._y << ", " << m_triIntersectData[i * 4 + 2]._z << ", " << std::endl;
-		//std::cout << "edgeL : " << edge1L << ", " << edge2L << std::endl;
-		//std::cout << "edgeDot : " << edgeDot << std::endl;
-		//std::cout << "edge1 : " << edge1._x << ", " << edge1._y << ", " << edge1._z << ", " << std::endl;
-		//std::cout << "edge2 : " << edge2._x << ", " << edge2._y << ", " << edge2._z << ", " << std::endl;
-		//std::cout << "triArea : " << m_triArea[i] << std::endl;
+		m_triIntersectData[i * 3] = m_pVertices[tempTriOrder[i].vertInd0].pos;
+		m_triIntersectData[i * 3 + 1] = m_pVertices[tempTriOrder[i].vertInd1].pos;
+		m_triIntersectData[i * 3 + 2] = m_pVertices[tempTriOrder[i].vertInd2].pos;
 	}
 	m_pTriangles = tempTriOrder;
 	SetIsCudaDirty(true);

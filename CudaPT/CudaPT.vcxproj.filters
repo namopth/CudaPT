@@ -120,8 +120,5 @@
     <CudaCompile Include="..\src\cudaRTBVHDebug.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTPTApprox.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
   </ItemGroup>
 </Project>

@@ -57,11 +57,6 @@ namespace NPBVHHelper
 	{
 		if (triN <= 0) 
 			return;
-
-		node->triStart = triStart;
-		node->triN = triN;
-		node->desN = 0;
-
 		// calculate bound
 		NPRayHelper::AABBBox centroidBound(NPMathHelper::Vec3(M_INF, M_INF, M_INF), NPMathHelper::Vec3(M_MIN_INF, M_MIN_INF, M_MIN_INF));
 		for (uint32 i = 0; i < triN; i++)
@@ -70,17 +65,6 @@ namespace NPBVHHelper
 			node->bound = node->bound.merge(bvhTris[ind].bound);
 			centroidBound = centroidBound.merge(bvhTris[ind].centroid);
 		}
-
-		// calculate bound's faces area
-		{
-			NPMathHelper::Vec3 diaLength = node->bound.maxPoint - node->bound.minPoint;
-			node->boundFaceArea[0] = fabs(diaLength._y * diaLength._z);
-			node->boundFaceArea[1] = fabs(diaLength._x * diaLength._z);
-			node->boundFaceArea[2] = fabs(diaLength._y * diaLength._x);
-			//std::cout << "diaLength : " << diaLength._x << ", " << diaLength._y << ", " << diaLength._z << ", " << std::endl;
-			//std::cout << "faceArea : " << node->boundFaceArea[0] << ", " << node->boundFaceArea[1] << ", " << node->boundFaceArea[2] << ", " << std::endl;
-		}
-
 		//std::cout << "==node==" << std::endl;
 		//for (uint32 i = 0; i != 24; i++)
 		//	std::cout << reorderedTriOrder[i] << " ";
@@ -301,18 +285,15 @@ namespace NPBVHHelper
 	uint32 InitialCompactBVHOnNode(const BVHNode* node, CompactBVH* compact, uint32 curInd)
 	{
 		compact->bounds[curInd] = node->bound;
-		compact->boundsFaceArea[curInd * 3] = node->boundFaceArea[0];
-		compact->boundsFaceArea[curInd * 3 + 1] = node->boundFaceArea[1];
-		compact->boundsFaceArea[curInd * 3 + 2] = node->boundFaceArea[2];
-		compact->offTSTN[curInd * 3 + 1] = node->triStart;
-		compact->offTSTN[curInd * 3 + 2] = node->triN;
 		if (!node->childNodes[0] || !node->childNodes[1])
 		{
-			compact->offTSTN[curInd * 3] = 0;
+			compact->offOrTSTN[curInd * 2] = node->triStart;
+			compact->offOrTSTN[curInd * 2 + 1] = node->triN;
 			return 1;
 		}
+		compact->offOrTSTN[curInd * 2 + 1] = 0;
 		uint32 firstChildDes = InitialCompactBVHOnNode(node->childNodes[0], compact, curInd + 1);
-		compact->offTSTN[curInd * 3] = firstChildDes + 1;
+		compact->offOrTSTN[curInd * 2] = firstChildDes + 1;
 		return InitialCompactBVHOnNode(node->childNodes[1], compact, curInd + firstChildDes + 1) + firstChildDes + 1;
 	}
 
@@ -320,14 +301,12 @@ namespace NPBVHHelper
 	{
 		if (!bvhRoot) return false;
 		DELETE_ARRAY(bounds);
-		DELETE_ARRAY(offTSTN);
-		DELETE_ARRAY(boundsFaceArea);
+		DELETE_ARRAY(offOrTSTN);
 		nodeN = bvhRoot->desN + 1;
 		if (nodeN <= 0) return false;
 
 		bounds = new NPRayHelper::AABBBox[nodeN];
-		offTSTN = new uint32[nodeN * 3];
-		boundsFaceArea = new float[nodeN * 3];
+		offOrTSTN = new uint32[nodeN * 2];
 		if (InitialCompactBVHOnNode(bvhRoot, this, 0) == nodeN)
 			return true;
 		return false;
