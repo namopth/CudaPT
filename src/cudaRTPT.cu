@@ -153,6 +153,9 @@ namespace cudaRTPT
 				float3 reflDir;
 				float3 refrDir;
 
+				CURay nextRay = ray;
+				float3 lightMulTerm;
+
 				if (refrProb > 0)
 				{
 					bool into = vecDot(nl, norm) > 0.f;
@@ -181,8 +184,9 @@ namespace cudaRTPT
 				// Reflected
 				if (reflProb > 0 && curand_uniform(randstate) < reflProb)
 				{
-					CURay nextRay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
-					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+					nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
+					// ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+
 					// Microfacet specular = D*G*F / (4*NoL*NoV)
 					// pdf = D * NoH / (4 * VoH)
 					// (G * F * VoH) / (NoV * NoH)
@@ -191,7 +195,8 @@ namespace cudaRTPT
 					float NoH = vecDot(nl, hDir);
 					float NoL = vecDot(nl, reflDir);
 					float G = GeometricVisibility(roughness, NoV, NoL, VoH);
-					shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
+					//shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
+					lightMulTerm = (brdf_f * G * VoH) / (NoV * NoH * reflProb);
 				}
 
 				// Diffused or Transmited
@@ -200,10 +205,11 @@ namespace cudaRTPT
 					// Transmited
 					if (refrProb > 0 && curand_uniform(randstate) < refrProb)
 					{
-						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						nextRay = CURay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
+						//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 						float cosine = vecDot(-1 * nl, refrDir);
-						shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
+						//shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
+						lightMulTerm = cosine * diff / (refrProb * (1 - reflProb));
 					}
 					// Diffused
 					else
@@ -218,15 +224,19 @@ namespace cudaRTPT
 						float r2sin = 1.f - r2cos*r2cos;
 						float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
-						CURay nextRay(ray.orig + traceResult.dist * ray.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+						nextRay = CURay(ray.orig + traceResult.dist * ray.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
+						//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 
 						float VoH = vecDot(-1 * ray.dir, hDir);
 						float NoV = vecDot(nl, -1 * ray.dir);
 						float NoL = vecDot(nl, diffDir);
-						shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
+						//shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
+						lightMulTerm = M_PI * Diffuse(diff, roughness, NoV, NoL, VoH)/ ((1 - refrProb) * (1 - reflProb));
 					}
 				}
+
+				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
+				shadeResult = vecMul(lightMulTerm, nextRayResult.light) + emissive;
 			}
 #else
 			float refrProb = curand_uniform(randstate);
