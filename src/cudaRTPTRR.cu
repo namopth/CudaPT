@@ -1,8 +1,8 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 5
-namespace cudaRTPT
+#define NORMALRAY_BOUND_MAX 9
+namespace cudaRTPTRR
 {
 	CUDA_RT_COMMON_ATTRIBS_N(0)
 	CUDA_RT_COMMON_ATTRIBS_BGN
@@ -94,8 +94,15 @@ namespace cudaRTPT
 		float3 light;
 	};
 
+	enum RAYTYPE
+	{
+		RAYTYPE_EYE = 0,
+		RAYTYPE_DIFF = 1,
+		RAYTYPE_SPEC = 2
+	};
+
 	template <int depth = 0>
-	__device__ ShootRayResult pt0_normalRay(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
+	__device__ ShootRayResult pt0_normalRay(const CURay& ray, RAYTYPE rayType, float pixelContrib, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
 	{
 		ShootRayResult rayResult;
 		if (depth > 5)
@@ -136,8 +143,6 @@ namespace cudaRTPT
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
 			float3 shadeResult = make_float3(0.f,0.f,0.f);
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
-#define MICROFACET_MODEL
-#ifdef MICROFACET_MODEL
 			{
 				// Get some random microfacet
 				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(randstate), curand_uniform(randstate)), roughness, nl);
@@ -155,6 +160,7 @@ namespace cudaRTPT
 
 				CURay nextRay = ray;
 				float3 lightMulTerm;
+				RAYTYPE nextRayType = rayType;
 
 				if (refrProb > 0)
 				{
@@ -197,6 +203,7 @@ namespace cudaRTPT
 					float G = GeometricVisibility(roughness, NoV, NoL, VoH);
 					//shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
 					lightMulTerm = (brdf_f * G * VoH) / (NoV * NoH * reflProb);
+					nextRayType = RAYTYPE_SPEC;
 				}
 
 				// Diffused or Transmited
@@ -210,6 +217,7 @@ namespace cudaRTPT
 						float cosine = vecDot(-1 * nl, refrDir);
 						//shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
 						lightMulTerm = cosine * diff / (refrProb * (1 - reflProb));
+						nextRayType = RAYTYPE_SPEC;
 					}
 					// Diffused
 					else
@@ -232,83 +240,26 @@ namespace cudaRTPT
 						float NoL = vecDot(nl, diffDir);
 						//shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
 						lightMulTerm = M_PI * Diffuse(diff, roughness, NoV, NoL, VoH)/ ((1 - refrProb) * (1 - reflProb));
+						nextRayType = RAYTYPE_DIFF;
 					}
 				}
 
-				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-				shadeResult = vecMul(lightMulTerm, nextRayResult.light) + emissive;
-			}
-#else
-			float refrProb = curand_uniform(randstate);
-			float3 refrDir = ray.dir;
-			if (refrProb < trans)
-			{
-				bool into = vecDot(nl, norm) > 0.f;
-				float nt = specular * 0.8f + 1.f;
-				float nc = 1.0f;
-				float nnt = into ? nc / nt : nt / nc;
-				float ddn = vecDot(nl, ray.dir);
-				float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
-				if (cos2t < 0.f)
+				pixelContrib = pixelContrib * length(lightMulTerm);
+				ShootRayResult nextRayResult;
+
+				if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+					pixelContrib = 0.f;
+
+				if (curand_uniform(randstate) < pixelContrib)
 				{
-					float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
-					CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-					ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-					float cosine = vecDot(nl, refDir);
-					shadeResult = (cosine * nextRayResult.light) / trans + emissive;
+					nextRayResult = pt0_normalRay<depth + 1>(nextRay, nextRayType, pixelContrib, vertices, triangles, materials, textures, randstate);
 				}
 				else
 				{
-					refrDir = normalize(ray.dir * nnt - norm * ((into ? 1 : -1)*(ddn*nnt + sqrtf(cos2t))));
-					float a = nt - nc;
-					float b = nt + nc;
-					float r0 = a * a / (b * b);
-					float c = 1.f - (into ? -ddn : vecDot(refrDir, norm));
-					float re = r0 + (1.f - r0)*c*c*c*c*c;
-					float tr = 1.f - re;
-					float p = re;
-					float reflProb = curand_uniform(randstate);
-					if (reflProb < p)
-					{
-						float3 refDir = normalize(ray.dir - norm * 2 * vecDot(norm, ray.dir));
-						CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-						float cosine = vecDot(nl, refDir);
-						shadeResult = (re * cosine * nextRayResult.light) / (trans * p) + emissive;
-					}
-					else
-					{
-						CURay nextRay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
-						ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-						float cosine = vecDot(-1 * nl, refrDir);
-						shadeResult = (tr * cosine * nextRayResult.light) / (trans * (1.f - p)) + emissive;
-					}
+					nextRayResult.light = make_float3(0.f, 0.f, 0.f);
 				}
+				shadeResult = vecMul(lightMulTerm, nextRayResult.light) + emissive;
 			}
-			else
-			{
-				float3 w = nl;
-				float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
-				float3 v = vecCross(w, u);
-				u = vecCross(v, w);
-
-				//float r1 = 2.f * M_PI * curand_uniform(randstate);
-				//float r2 = curand_uniform(randstate);
-				//float r2s = sqrtf(r2);
-				//float3 refDir = normalize(u*cosf(r1)*r2s + v*sinf(r1)*r2s + w*sqrtf(1.f - r2));
-
-				float r1 = 2.f * M_PI * curand_uniform(randstate);
-				float r2 = 0.5f * M_PI * curand_uniform(randstate);
-				float r2sin = sinf(r2);
-				float3 refDir = normalize(w * cosf(r2) + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
-
-				CURay nextRay(ray.orig + traceResult.dist * ray.dir + refDir * M_FLT_BIAS_EPSILON, refDir);
-				ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
-				nextRayResult.light = nextRayResult.light;
-				float cosine = vecDot(nl, refDir);
-				shadeResult = (M_PI * cosine * vecMul(diff, nextRayResult.light)) / (1 - trans) + emissive;
-			}
-#endif
 			rayResult.light = shadeResult;
 		}
 		else
@@ -320,7 +271,7 @@ namespace cudaRTPT
 	}
 
 	template <>
-	__device__ ShootRayResult pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
+	__device__ ShootRayResult pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RAYTYPE rayType, float pixelContrib, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
 		, curandState *randstate)
 	{
 		ShootRayResult rayResult;
@@ -358,7 +309,7 @@ namespace cudaRTPT
 		float3 dir = normalize(camRight * u + camUp * v + camDir);
 		CURay ray(camPos, dir);
 
-		ShootRayResult rayResult = pt0_normalRay(ray, vertices, triangles, materials, textures, &randstate);
+		ShootRayResult rayResult = pt0_normalRay(ray, RAYTYPE_EYE, 1.0f,vertices, triangles, materials, textures, &randstate);
 
 		float resultInf = 1.f / (float)(frameN + 1);
 		float oldInf = 1.f - resultInf;
