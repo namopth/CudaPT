@@ -123,5 +123,8 @@
     <CudaCompile Include="..\src\cudaRTPTRR.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTPTRegen.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

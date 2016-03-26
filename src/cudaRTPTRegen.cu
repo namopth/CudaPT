@@ -2,7 +2,7 @@
 
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 10
-namespace cudaRTPTRR
+namespace cudaRTPTRegen
 {
 	CUDA_RT_COMMON_ATTRIBS_N(0)
 	CUDA_RT_COMMON_ATTRIBS_BGN
@@ -89,9 +89,48 @@ namespace cudaRTPTRR
 	uint32 g_uCurFrameN;
 	size_t g_resultDataSize = 0;
 
-	struct ShootRayResult
+	struct TracerData
 	{
-		float3 light;
+		float2* winSize;
+		float3* camOrig;
+		float3* camU;
+		float3* camR;
+		float3* camD;
+		RTVertex* vertices;
+		RTTriangle* triangles;
+		RTMaterial* materials;
+		CURTTexture* textures;
+		curandState *randstate;
+
+		__device__ TracerData(float2* _winSize, float3* _camOrig, float3* _camU, float3* _camR, float3* _camD
+			, RTVertex* _vertices, RTTriangle* _triangles, RTMaterial* _materials, CURTTexture* _textures, curandState* _randState)
+			: winSize(_winSize)
+			, camOrig(_camOrig)
+			, camU(_camU)
+			, camR(_camR)
+			, camD(_camD)
+			, vertices(_vertices)
+			, triangles(_triangles)
+			, materials(_materials)
+			, textures(_textures)
+			, randstate(_randState)
+		{}
+	};
+
+	struct PTSample
+	{
+		float2 pixel;
+		float pixelContrib;
+		uint pathDepth;
+		uint sampleTime;
+		float3 sampleResult;
+		float3 accumResult;
+
+		__device__ PTSample(float2 _pixel)
+			: pixel(_pixel), pixelContrib(1.0f), pathDepth(0), sampleTime(0), accumResult()
+		{
+			accumResult = sampleResult = make_float3(0.f, 0.f, 0.f);
+		}
 	};
 
 	enum RAYTYPE
@@ -102,18 +141,16 @@ namespace cudaRTPTRR
 	};
 
 	template <int depth = 0>
-	__device__ ShootRayResult pt0_normalRay(const CURay& ray, RAYTYPE rayType, float pixelContrib, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
+	__device__ void pt0_normalRay(const CURay& ray, RAYTYPE rayType, PTSample& sample, TracerData& tracerData)
 	{
-		ShootRayResult rayResult;
-
 		TracePrimitiveResult traceResult;
 		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 		{
-			RTTriangle* tri = &triangles[traceResult.triId];
-			RTMaterial* mat = &materials[tri->matInd];
-			RTVertex* v0 = &vertices[tri->vertInd0];
-			RTVertex* v1 = &vertices[tri->vertInd1];
-			RTVertex* v2 = &vertices[tri->vertInd2];
+			RTTriangle* tri = &tracerData.triangles[traceResult.triId];
+			RTMaterial* mat = &tracerData.materials[tri->matInd];
+			RTVertex* v0 = &tracerData.vertices[tri->vertInd0];
+			RTVertex* v1 = &tracerData.vertices[tri->vertInd1];
+			RTVertex* v2 = &tracerData.vertices[tri->vertInd2];
 			float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
 			float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
 			float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
@@ -134,13 +171,12 @@ namespace cudaRTPTRR
 			float sheenTint;
 			float clearcoat;
 			float clearcoatGloss;
-			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness
+			GetMaterialColors(mat, uv, tracerData.textures, diff, norm, emissive, trans, specular, metallic, roughness
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
-			float3 shadeResult = make_float3(0.f,0.f,0.f);
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
 			{
 				// Get some random microfacet
-				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(randstate), curand_uniform(randstate)), roughness, nl);
+				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(tracerData.randstate), curand_uniform(tracerData.randstate)), roughness, nl);
 
 				// Calculate flesnel
 				float voH = vecDot(-1 * ray.dir, hDir);
@@ -183,7 +219,7 @@ namespace cudaRTPTRR
 				}
 
 				// Reflected
-				if (reflProb > 0 && curand_uniform(randstate) < reflProb)
+				if (reflProb > 0 && curand_uniform(tracerData.randstate) < reflProb)
 				{
 					nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
 					// ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
@@ -205,7 +241,7 @@ namespace cudaRTPTRR
 				else
 				{
 					// Transmited
-					if (refrProb > 0 && curand_uniform(randstate) < refrProb)
+					if (refrProb > 0 && curand_uniform(tracerData.randstate) < refrProb)
 					{
 						nextRay = CURay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
 						//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
@@ -222,8 +258,8 @@ namespace cudaRTPTRR
 						float3 v = vecCross(w, u);
 						u = vecCross(v, w);
 
-						float r1 = 2.f * M_PI * curand_uniform(randstate);
-						float r2cos = sqrtf(curand_uniform(randstate));
+						float r1 = 2.f * M_PI * curand_uniform(tracerData.randstate);
+						float r2cos = sqrtf(curand_uniform(tracerData.randstate));
 						float r2sin = 1.f - r2cos*r2cos;
 						float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
@@ -239,39 +275,50 @@ namespace cudaRTPTRR
 					}
 				}
 
-				pixelContrib = pixelContrib * length(lightMulTerm);
-				ShootRayResult nextRayResult;
+				sample.pixelContrib = sample.pixelContrib * length(lightMulTerm);
+				float nextRayResult;
 
 				if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
-					pixelContrib = 0.f;
+					sample.pixelContrib = 0.f;
 
-				if (curand_uniform(randstate) < pixelContrib)
+				bool isAccum = (sample.pathDepth == 0);
+				if (curand_uniform(tracerData.randstate) >= sample.pixelContrib)
 				{
-					nextRayResult = pt0_normalRay<depth + 1>(nextRay, nextRayType, pixelContrib, vertices, triangles, materials, textures, randstate);
+					sample.sampleResult = make_float3(0.f, 0.f, 0.f);
+					sample.pixelContrib = 1.0f;
+					sample.pathDepth = 0;
+					sample.sampleTime++;
+					nextRayType = RAYTYPE_EYE;
+					float au = sample.pixel.x + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->x;
+					float av = sample.pixel.y + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y;
+					float3 dir = normalize(*tracerData.camR * au + *tracerData.camU * av + *tracerData.camD);
+					nextRay = CURay(*tracerData.camOrig, dir);
 				}
 				else
 				{
-					nextRayResult.light = make_float3(0.f, 0.f, 0.f);
+					sample.pathDepth++;
 				}
-				shadeResult = vecMul(lightMulTerm, nextRayResult.light) + emissive;
+
+				pt0_normalRay<depth + 1>(nextRay, nextRayType, sample, tracerData);
+
+				sample.sampleResult = vecMul(lightMulTerm, sample.sampleResult) + emissive;
+
+				if (isAccum && sample.sampleTime > 0)
+					sample.accumResult = sample.accumResult + sample.sampleResult / sample.sampleTime;
 			}
-			rayResult.light = shadeResult;
 		}
 		else
 		{
-			rayResult.light = make_float3(0.f, 0.f, 0.f);
+			sample.sampleTime++;
+			sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 		}
-
-		return rayResult;
 	}
 
 	template <>
-	__device__ ShootRayResult pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RAYTYPE rayType, float pixelContrib, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
-		, curandState *randstate)
+	__device__ void pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RAYTYPE rayType, PTSample& sample, TracerData& tracerData)
 	{
-		ShootRayResult rayResult;
-		rayResult.light.x = rayResult.light.y = rayResult.light.z = 0.f;
-		return rayResult;
+		sample.sampleTime++;
+		sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 	}
 
 	uint32 WangHash(uint32 a) {
@@ -298,19 +345,23 @@ namespace cudaRTPTRR
 
 		curandState randstate;
 		curand_init(hashedFrameN + ind, 0, 0, &randstate);
-		u = u + (curand_uniform(&randstate) - 0.5f) / width;
-		v = v + (curand_uniform(&randstate) - 0.5f) / height;
+		float au = u + (curand_uniform(&randstate) - 0.5f) / width;
+		float av = v + (curand_uniform(&randstate) - 0.5f) / height;
 
-		float3 dir = normalize(camRight * u + camUp * v + camDir);
+		float3 dir = normalize(camRight * au + camUp * av + camDir);
 		CURay ray(camPos, dir);
 
-		ShootRayResult rayResult = pt0_normalRay(ray, RAYTYPE_EYE, 1.0f,vertices, triangles, materials, textures, &randstate);
+		PTSample sampleResult(make_float2(u, v));
+
+		float2 winSize = make_float2(width, height);
+		TracerData tracerData(&winSize, &camPos, &camUp, &camRight, &camDir, vertices, triangles, materials, textures, &randstate);
+		pt0_normalRay(ray, RAYTYPE_EYE, sampleResult, tracerData);
 
 		float resultInf = 1.f / (float)(frameN + 1);
 		float oldInf = 1.f - resultInf;
-		result[ind] = max(resultInf * rayResult.light.x + oldInf * result[ind], 0.f);
-		result[ind + 1] = max(resultInf * rayResult.light.y + oldInf * result[ind + 1], 0.f);
-		result[ind + 2] = max(resultInf * rayResult.light.z + oldInf * result[ind + 2], 0.f);
+		result[ind] = max(resultInf * sampleResult.accumResult.x + oldInf * result[ind], 0.f);
+		result[ind + 1] = max(resultInf * sampleResult.accumResult.y + oldInf * result[ind + 1], 0.f);
+		result[ind + 2] = max(resultInf * sampleResult.accumResult.z + oldInf * result[ind + 2], 0.f);
 	}
 
 	void CleanMem()

@@ -1,7 +1,7 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 5
+#define NORMALRAY_BOUND_MAX 10
 namespace cudaRTPT
 {
 	CUDA_RT_COMMON_ATTRIBS_N(0)

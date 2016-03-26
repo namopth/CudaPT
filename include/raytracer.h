@@ -1,6 +1,7 @@
 #ifdef RT_XGEN
 DEFINE_RT(Cuda PT Naive, cudaRTPT)
 DEFINE_RT(Cuda PT Naive RR, cudaRTPTRR)
+DEFINE_RT(Cuda PT Regeneration, cudaRTPTRegen)
 DEFINE_RT(Cuda Debug, cudaRTDebug)
 DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #endif
