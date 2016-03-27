@@ -92,6 +92,7 @@ namespace cudaRTPTRegen
 	struct TracerData
 	{
 		float2* winSize;
+		float fov;
 		float3* camOrig;
 		float3* camU;
 		float3* camR;
@@ -102,9 +103,10 @@ namespace cudaRTPTRegen
 		CURTTexture* textures;
 		curandState *randstate;
 
-		__device__ TracerData(float2* _winSize, float3* _camOrig, float3* _camU, float3* _camR, float3* _camD
+		__device__ TracerData(float2* _winSize, float _fov,float3* _camOrig, float3* _camU, float3* _camR, float3* _camD
 			, RTVertex* _vertices, RTTriangle* _triangles, RTMaterial* _materials, CURTTexture* _textures, curandState* _randState)
 			: winSize(_winSize)
+			, fov(_fov)
 			, camOrig(_camOrig)
 			, camU(_camU)
 			, camR(_camR)
@@ -119,15 +121,16 @@ namespace cudaRTPTRegen
 
 	struct PTSample
 	{
-		float2 pixel;
+		uint2 pixel;
+		float2 uv;
 		float pixelContrib;
 		uint pathDepth;
 		uint sampleTime;
 		float3 sampleResult;
 		float3 accumResult;
 
-		__device__ PTSample(float2 _pixel)
-			: pixel(_pixel), pixelContrib(1.0f), pathDepth(0), sampleTime(0), accumResult()
+		__device__ PTSample(uint2 _pixel, float2 _uv)
+			: pixel(_pixel), uv(_uv), pixelContrib(1.0f), pathDepth(0), sampleTime(0), accumResult()
 		{
 			accumResult = sampleResult = make_float3(0.f, 0.f, 0.f);
 		}
@@ -284,13 +287,12 @@ namespace cudaRTPTRegen
 				bool isAccum = (sample.pathDepth == 0);
 				if (curand_uniform(tracerData.randstate) >= sample.pixelContrib)
 				{
-					sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 					sample.pixelContrib = 1.0f;
 					sample.pathDepth = 0;
 					sample.sampleTime++;
 					nextRayType = RAYTYPE_EYE;
-					float au = sample.pixel.x + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->x;
-					float av = sample.pixel.y + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y;
+					float au = sample.uv.x + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
+					float av = sample.uv.y + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
 					float3 dir = normalize(*tracerData.camR * au + *tracerData.camU * av + *tracerData.camD);
 					nextRay = CURay(*tracerData.camOrig, dir);
 				}
@@ -304,12 +306,15 @@ namespace cudaRTPTRegen
 				sample.sampleResult = vecMul(lightMulTerm, sample.sampleResult) + emissive;
 
 				if (isAccum && sample.sampleTime > 0)
-					sample.accumResult = sample.accumResult + sample.sampleResult / sample.sampleTime;
+				{
+					sample.accumResult = sample.accumResult + sample.sampleResult / (float)sample.sampleTime;
+					sample.sampleResult = make_float3(0.f, 0.f, 0.f);
+				}
 			}
 		}
 		else
 		{
-			sample.sampleTime++;
+			//sample.sampleTime++;
 			sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 		}
 	}
@@ -317,7 +322,7 @@ namespace cudaRTPTRegen
 	template <>
 	__device__ void pt0_normalRay<NORMALRAY_BOUND_MAX>(const CURay& ray, RAYTYPE rayType, PTSample& sample, TracerData& tracerData)
 	{
-		sample.sampleTime++;
+		//sample.sampleTime++;
 		sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 	}
 
@@ -345,16 +350,16 @@ namespace cudaRTPTRegen
 
 		curandState randstate;
 		curand_init(hashedFrameN + ind, 0, 0, &randstate);
-		float au = u + (curand_uniform(&randstate) - 0.5f) / width;
-		float av = v + (curand_uniform(&randstate) - 0.5f) / height;
+		float au = u + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+		float av = v + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
 
 		float3 dir = normalize(camRight * au + camUp * av + camDir);
 		CURay ray(camPos, dir);
 
-		PTSample sampleResult(make_float2(u, v));
+		PTSample sampleResult(make_uint2(x,y), make_float2(u, v));
 
 		float2 winSize = make_float2(width, height);
-		TracerData tracerData(&winSize, &camPos, &camUp, &camRight, &camDir, vertices, triangles, materials, textures, &randstate);
+		TracerData tracerData(&winSize, fov, &camPos, &camUp, &camRight, &camDir, vertices, triangles, materials, textures, &randstate);
 		pt0_normalRay(ray, RAYTYPE_EYE, sampleResult, tracerData);
 
 		float resultInf = 1.f / (float)(frameN + 1);

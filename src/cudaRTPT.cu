@@ -352,8 +352,8 @@ namespace cudaRTPT
 
 		curandState randstate;
 		curand_init(hashedFrameN + ind, 0, 0, &randstate);
-		u = u + (curand_uniform(&randstate) - 0.5f) / width;
-		v = v + (curand_uniform(&randstate) - 0.5f) / height;
+		u = u + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+		v = v + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
 
 		float3 dir = normalize(camRight * u + camUp * v + camDir);
 		CURay ray(camPos, dir);

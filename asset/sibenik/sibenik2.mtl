@@ -1,0 +1,142 @@
+newmtl kamen_zid
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd kamen.png
+map_Ka kamen.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl kamen_zid_parapet
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd KAMEN-stup.png
+map_Ka KAMEN-stup.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl kamen_zid_prozor
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd kamen.png
+map_Ka kamen.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl pod
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd mramor6x6.png
+map_Ka mramor6x6.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl pod_rub
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd kamen.png
+map_Ka kamen.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl pod_tepih
+illum 4
+Kd 0.55 0.22 0.18
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl rozeta
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd KAMEN-stup.png
+map_Ka KAMEN-stup.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl sibenik2_initialShadingGroup
+illum 4
+Kd 0.50 0.50 0.50
+Ka 20.00 20.00 20.00
+Tf 1.00 1.00 1.00
+Ni 1.00
+newmtl sprljci
+illum 4
+Kd 0.78 0.78 0.78
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl staklo
+illum 4
+Kd 0.78 0.78 0.78
+Ka 0.00 0.00 0.00
+Tf 0.10 0.10 0.10
+Ni 1.50
+Ks 0.78 0.78 0.78
+Ns 256.00
+newmtl staklo_crveno
+illum 4
+Kd 0.44 0.10 0.05
+Ka 0.00 0.00 0.00
+Tf 0.80 0.80 0.80
+Ni 1.50
+Ks 0.88 0.21 0.10
+Ns 256.00
+newmtl staklo_plavo
+illum 4
+Kd 0.04 0.07 0.39
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+Ni 1.50
+Ks 0.80 0.80 0.80
+Ns 256.00
+newmtl staklo_zeleno
+illum 4
+Kd 0.03 0.32 0.04
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+Ni 1.50
+Ks 0.80 0.80 0.80
+Ns 256.00
+newmtl staklo_zuto
+illum 4
+Kd 0.50 0.45 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+Ni 1.50
+Ks 0.80 0.80 0.80
+Ns 256.00
+newmtl stupovi
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd KAMEN-stup.png
+map_Ka KAMEN-stup.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
+newmtl zid_vani
+illum 4
+Kd 0.00 0.00 0.00
+Ka 0.00 0.00 0.00
+Tf 1.00 1.00 1.00
+map_Kd kamen.png
+map_Ka kamen.png
+Ni 1.50
+Ks 0.00 0.00 0.00
+Ns 8.00
