@@ -1,7 +1,8 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 10
+#define NORMALRAY_BOUND_MAX 3
+
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 320
 
@@ -137,53 +138,6 @@ namespace cudaRTBDPTRegen
 		{}
 	};
 
-	struct TracerData
-	{
-		float2* winSize;
-		float fov;
-		float3* camOrig;
-		float3* camU;
-		float3* camR;
-		float3* camD;
-		RTVertex* vertices;
-		RTTriangle* triangles;
-		RTMaterial* materials;
-		CURTTexture* textures;
-		curandState *randstate;
-
-		__device__ TracerData(float2* _winSize, float _fov,float3* _camOrig, float3* _camU, float3* _camR, float3* _camD
-			, RTVertex* _vertices, RTTriangle* _triangles, RTMaterial* _materials, CURTTexture* _textures, curandState* _randState)
-			: winSize(_winSize)
-			, fov(_fov)
-			, camOrig(_camOrig)
-			, camU(_camU)
-			, camR(_camR)
-			, camD(_camD)
-			, vertices(_vertices)
-			, triangles(_triangles)
-			, materials(_materials)
-			, textures(_textures)
-			, randstate(_randState)
-		{}
-	};
-
-	struct PTSample
-	{
-		uint2 pixel;
-		float2 uv;
-		float pixelContrib;
-		uint pathDepth;
-		uint sampleTime;
-		float3 sampleResult;
-		float3 accumResult;
-
-		__device__ PTSample(uint2 _pixel, float2 _uv)
-			: pixel(_pixel), uv(_uv), pixelContrib(1.0f), pathDepth(0), sampleTime(0), accumResult()
-		{
-			accumResult = sampleResult = make_float3(0.f, 0.f, 0.f);
-		}
-	};
-
 	enum RAYTYPE
 	{
 		RAYTYPE_EYE = 0,
@@ -192,24 +146,81 @@ namespace cudaRTBDPTRegen
 		RAYTYPE_LIGHT = 3
 	};
 
-
-
 	template <int depth = 0>
 	__device__ void bdpt_light_ray(const CURay& ray, RAYTYPE rayType, float3 rayIrrad, uint lightSlot, LightTracerData& tracerData)
 	{
 		//Regenerate ray
-		if (!ray.isValid)
+		CURay lightRay = ray;
+		if (!lightRay.isValid)
 		{
 			uint lightTri = tracerData.lightTriN * curand_uniform(tracerData.randstate);
+			float lightW = curand_uniform(tracerData.randstate);
+			float lightU = curand_uniform(tracerData.randstate);
+			if (lightW + lightU > 1.0f)
+			{
+				lightW = 1.f - lightW;
+				lightU = 1.f - lightU;
+			}
+			float lightV = 1.f - lightW - lightU;
+
+			RTTriangle* tri = &tracerData.triangles[lightTri];
+			RTMaterial* mat = &tracerData.materials[tri->matInd];
+			RTVertex* v0 = &tracerData.vertices[tri->vertInd0];
+			RTVertex* v1 = &tracerData.vertices[tri->vertInd1];
+			RTVertex* v2 = &tracerData.vertices[tri->vertInd2];
+			float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
+			float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
+			float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
+			float2 uv = uv0 * lightW + uv1 * lightU + uv2 * lightV;
+			float3 n0 = V32F3(v0->norm);
+			float3 n1 = V32F3(v1->norm);
+			float3 n2 = V32F3(v2->norm);
+			float3 triNorm = n0 * lightW + n1 * lightU + n2 * lightV;
+			float3 triPos = V32F3(v0->pos) * lightW + V32F3(v1->pos) * lightU + V32F3(v2->pos) * lightV;
+
+			float3 diff;
+			float3 emissive;
+			float trans;
+			float specular;
+			float metallic;
+			float roughness;
+			float anisotropic;
+			float sheen;
+			float sheenTint;
+			float clearcoat;
+			float clearcoatGloss;
+			GetMaterialColors(mat, uv, tracerData.textures, diff, triNorm, emissive, trans, specular, metallic, roughness
+				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
+			float3 nl = vecDot(triNorm, lightRay.dir) < 0.f ? triNorm : -1 * triNorm;
+
+			float3 w = nl;
+			float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
+			float3 v = vecCross(w, u);
+			u = vecCross(v, w);
+
+			float r1 = 2.f * M_PI * curand_uniform(tracerData.randstate);
+			float r2cos = sqrtf(curand_uniform(tracerData.randstate));
+			float r2sin = 1.f - r2cos*r2cos;
+			float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
+
+			lightRay = CURay(triPos + diffDir * M_FLT_BIAS_EPSILON, diffDir);
+			rayIrrad = M_PI * emissive * (float)tracerData.lightTriN;
+			rayType = RAYTYPE_LIGHT;
 		}
 
 		CURay nextRay = CURay();
 		float3 lightMulTerm = make_float3(1.f,1.f,1.f);
 		RAYTYPE nextRayType = RAYTYPE_LIGHT;
-		uint nextLightSlot = lightSlot;
+
+		LightVertex resultVertex;
+		resultVertex.irrad = make_float3(0.f,0.f,0.f);
+		resultVertex.irradDir = lightRay.dir;
+		resultVertex.matInd = 0;
+		resultVertex.norm = lightRay.dir;
+		resultVertex.pos = make_float3(0.f,0.f,0.f);
 
 		TracePrimitiveResult traceResult;
-		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
+		if (TracePrimitive(lightRay, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 		{
 			RTTriangle* tri = &tracerData.triangles[traceResult.triId];
 			RTMaterial* mat = &tracerData.materials[tri->matInd];
@@ -238,13 +249,13 @@ namespace cudaRTBDPTRegen
 			float clearcoatGloss;
 			GetMaterialColors(mat, uv, tracerData.textures, diff, norm, emissive, trans, specular, metallic, roughness
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
-			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
+			float3 nl = vecDot(norm, lightRay.dir) < 0.f ? norm : -1 * norm;
 
 			// Get some random microfacet
 			float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(tracerData.randstate), curand_uniform(tracerData.randstate)), roughness, nl);
 
 			// Calculate flesnel
-			float voH = vecDot(-1 * ray.dir, hDir);
+			float voH = vecDot(-1 * lightRay.dir, hDir);
 			float3 f0 = vecLerp(0.08 * make_float3(specular, specular, specular), diff, metallic);
 			float3 brdf_f = Fresnel(f0, voH);
 
@@ -260,7 +271,7 @@ namespace cudaRTBDPTRegen
 				float nt = specular * 0.8f + 1.f;
 				float nc = 1.0f;
 				float nnt = into ? nc / nt : nt / nc;
-				float ddn = vecDot(hDir, ray.dir);
+				float ddn = vecDot(hDir, lightRay.dir);
 				float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
 				if (cos2t < 0.f)
 				{
@@ -268,13 +279,13 @@ namespace cudaRTBDPTRegen
 				}
 				else
 				{
-					refrDir = normalize(ray.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
+					refrDir = normalize(lightRay.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
 				}
 			}
 
 			if (reflProb > 0)
 			{
-				reflDir = normalize(ray.dir - hDir * 2 * vecDot(hDir, ray.dir));
+				reflDir = normalize(lightRay.dir - hDir * 2 * vecDot(hDir, lightRay.dir));
 				if (vecDot(reflDir, nl) < 0.f)
 					reflProb = 0.f;
 			}
@@ -282,14 +293,14 @@ namespace cudaRTBDPTRegen
 			// Reflected
 			if (reflProb > 0 && curand_uniform(tracerData.randstate) < reflProb)
 			{
-				nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
+				nextRay = CURay(lightRay.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * lightRay.dir, reflDir);
 				// ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 
 				// Microfacet specular = D*G*F / (4*NoL*NoV)
 				// pdf = D * NoH / (4 * VoH)
 				// (G * F * VoH) / (NoV * NoH)
-				float VoH = vecDot(-1 * ray.dir, hDir);
-				float NoV = vecDot(nl, -1 * ray.dir);
+				float VoH = vecDot(-1 * lightRay.dir, hDir);
+				float NoV = vecDot(nl, -1 * lightRay.dir);
 				float NoH = vecDot(nl, hDir);
 				float NoL = vecDot(nl, reflDir);
 				float G = GeometricVisibility(roughness, NoV, NoL, VoH);
@@ -304,7 +315,7 @@ namespace cudaRTBDPTRegen
 				// Transmited
 				if (refrProb > 0 && curand_uniform(tracerData.randstate) < refrProb)
 				{
-					nextRay = CURay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
+					nextRay = CURay(lightRay.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * lightRay.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
 					//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 					float cosine = vecDot(-1 * nl, refrDir);
 					//shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
@@ -324,11 +335,11 @@ namespace cudaRTBDPTRegen
 					float r2sin = 1.f - r2cos*r2cos;
 					float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
-					nextRay = CURay(ray.orig + traceResult.dist * ray.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
+					nextRay = CURay(lightRay.orig + traceResult.dist * lightRay.dir + diffDir * M_FLT_BIAS_EPSILON, diffDir);
 					//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 
-					float VoH = vecDot(-1 * ray.dir, hDir);
-					float NoV = vecDot(nl, -1 * ray.dir);
+					float VoH = vecDot(-1 * lightRay.dir, hDir);
+					float NoV = vecDot(nl, -1 * lightRay.dir);
 					float NoL = vecDot(nl, diffDir);
 					//shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
 					lightMulTerm = M_PI * Diffuse(diff, roughness, NoV, NoL, VoH) / ((1 - refrProb) * (1 - reflProb));
@@ -345,18 +356,15 @@ namespace cudaRTBDPTRegen
 				nextRay = CURay();
 			}
 
-			nextLightSlot = lightSlot + 1;
-
-			LightVertex resultVertex;
 			resultVertex.irrad = rayIrrad;
-			resultVertex.irradDir = -1 * ray.dir;
+			resultVertex.irradDir = -1 * lightRay.dir;
 			resultVertex.matInd = tri->matInd;
 			resultVertex.norm = norm;
-			resultVertex.pos = ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir;
-			tracerData.lightVertices[lightSlot] = resultVertex;
+			resultVertex.pos = lightRay.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * lightRay.dir;
 		}
 
-		bdpt_light_ray<depth + 1>(nextRay, nextRayType, lightMulTerm, nextLightSlot, tracerData);
+		tracerData.lightVertices[lightSlot] = resultVertex;
+		bdpt_light_ray<depth + 1>(nextRay, nextRayType, lightMulTerm, lightSlot + 1, tracerData);
 	}
 
 	template <>
@@ -376,6 +384,55 @@ namespace cudaRTBDPTRegen
 		LightTracerData tracerData(lightVertices, lightTri, lightTriN, vertices, triangles, materials, textures, &randstate);
 		bdpt_light_ray(CURay(), RAYTYPE_LIGHT, make_float3(0.f,0.f,0.f), result_slot, tracerData);
 	}
+
+	struct TracerData
+	{
+		float2* winSize;
+		float fov;
+		float3* camOrig;
+		float3* camU;
+		float3* camR;
+		float3* camD;
+		LightVertex* lightVertices;
+		RTVertex* vertices;
+		RTTriangle* triangles;
+		RTMaterial* materials;
+		CURTTexture* textures;
+		curandState *randstate;
+
+		__device__ TracerData(float2* _winSize, float _fov, float3* _camOrig, float3* _camU, float3* _camR, float3* _camD
+			, LightVertex* _lightVertices, RTVertex* _vertices, RTTriangle* _triangles, RTMaterial* _materials, CURTTexture* _textures, curandState* _randState)
+			: winSize(_winSize)
+			, fov(_fov)
+			, camOrig(_camOrig)
+			, camU(_camU)
+			, camR(_camR)
+			, camD(_camD)
+			, lightVertices(_lightVertices)
+			, vertices(_vertices)
+			, triangles(_triangles)
+			, materials(_materials)
+			, textures(_textures)
+			, randstate(_randState)
+		{}
+	};
+
+	struct PTSample
+	{
+		uint2 pixel;
+		float2 uv;
+		float pixelContrib;
+		uint pathDepth;
+		uint sampleTime;
+		float3 sampleResult;
+		float3 accumResult;
+
+		__device__ PTSample(uint2 _pixel, float2 _uv)
+			: pixel(_pixel), uv(_uv), pixelContrib(1.0f), pathDepth(0), sampleTime(0), accumResult()
+		{
+			accumResult = sampleResult = make_float3(0.f, 0.f, 0.f);
+		}
+	};
 
 	template <int depth = 0>
 	__device__ void pt0_normalRay(const CURay& ray, RAYTYPE rayType, PTSample& sample, TracerData& tracerData)
@@ -682,6 +739,14 @@ namespace cudaRTBDPTRegen
 		float3 f3CamUp = V32F3(camUp);
 		float3 f3CamDir = V32F3(camDir);
 		float3 f3CamRight = V32F3(camRight);
+
+		//if (g_uCurFrameN % 3)
+		{
+			dim3 block(BLOCK_SIZE, 1, 1);
+			dim3 grid(LIGHTVERTEX_N / block.x, 1, 1);
+			bdpt_light_kernel << < grid, block >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devLightVertices, g_devLightTri, g_lightTriN, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
+				, g_uCurFrameN, WangHash(g_uCurFrameN));
+		}
 
 		// Kernel go here
 		dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
