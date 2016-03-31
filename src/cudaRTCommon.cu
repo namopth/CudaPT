@@ -19,7 +19,8 @@ bool g_bIsCudaInit = false;
 
 __hd__ CURTTexture::CURTTexture() {}
 
-__hd__ CURay::CURay(float3 _orig, float3 _dir) : orig(_orig), dir(_dir) {}
+__hd__ CURay::CURay(float3 _orig, float3 _dir) : orig(_orig), dir(_dir), isValid(true) {}
+__hd__ CURay::CURay() : isValid(false) {}
 __hd__ float CURay::IntersectAABB(const float3& _min, const float3& _max) const
 {
 	float3 modDir = dir;

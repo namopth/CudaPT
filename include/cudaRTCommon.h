@@ -53,9 +53,11 @@ extern bool g_bIsCudaInit;
 
 struct CURay
 {
+	bool isValid;
 	float3 orig;
 	float3 dir;
 	__hd__ CURay(float3 _orig, float3 _dir);
+	__hd__ CURay();
 	__hd__ float IntersectAABB(const float3& _min, const float3& _max) const;
 
 	__hd__ float IntersectTri(const float3& _p0, const float3& _e0, const float3& _e1, float& w, float& u, float& v, float epsilon = M_EPSILON, bool cullback = true) const;
