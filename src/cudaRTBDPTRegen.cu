@@ -1,10 +1,10 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 1
+#define NORMALRAY_BOUND_MAX 3
 
-#define LIGHTRAY_BOUND_MAX 1
-#define LIGHTVERTEX_N 320
+#define LIGHTRAY_BOUND_MAX 5
+#define LIGHTVERTEX_N 740
 
 namespace cudaRTBDPTRegen
 {
@@ -151,6 +151,14 @@ namespace cudaRTBDPTRegen
 	template <int depth = 0>
 	__device__ void bdpt_light_ray(const CURay& ray, RAYTYPE rayType, float3 rayIrrad, uint lightSlot, LightTracerData& tracerData)
 	{
+		CURay nextRay = CURay();
+		float3 lightMulTerm = make_float3(1.f, 1.f, 1.f);
+		RAYTYPE nextRayType = RAYTYPE_LIGHT;
+
+		LightVertex resultVertex = LightVertex();
+
+		TracePrimitiveResult traceResult;
+
 		//Regenerate ray
 		CURay lightRay = ray;
 		if (!lightRay.isValid || length(rayIrrad) < M_FLT_BIAS_EPSILON)
@@ -206,18 +214,20 @@ namespace cudaRTBDPTRegen
 			float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
 			lightRay = CURay(triPos + triNorm * M_FLT_BIAS_EPSILON, diffDir);
-			rayIrrad = emissive * (float)tracerData.lightTriN;
+			rayIrrad = emissive;// *(float)tracerData.lightTriN;
 			rayType = RAYTYPE_LIGHT;
+
+			resultVertex.irrad = rayIrrad;
+			resultVertex.irradDir = make_float3(0.f,0.f,0.f);
+			resultVertex.norm = triNorm;
+			resultVertex.pos = triPos;
+			resultVertex.diff = diff;
+			resultVertex.emissive = emissive;
+			resultVertex.specular = specular;
+			resultVertex.metallic = metallic;
+			resultVertex.roughness = roughness;
 		}
-
-		CURay nextRay = CURay();
-		float3 lightMulTerm = make_float3(1.f,1.f,1.f);
-		RAYTYPE nextRayType = RAYTYPE_LIGHT;
-
-		LightVertex resultVertex = LightVertex();
-
-		TracePrimitiveResult traceResult;
-		if (TracePrimitive(lightRay, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
+		else if (TracePrimitive(lightRay, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 		{
 			RTTriangle* tri = &tracerData.triangles[traceResult.triId];
 			RTMaterial* mat = &tracerData.materials[tri->matInd];
@@ -447,7 +457,7 @@ namespace cudaRTBDPTRegen
 		float voH = vecDot(lightOutDir, h);
 		float noV = vecDot(norm, lightOutDir);
 		float noH = vecDot(norm, h);
-		float noL = saturate(vecDot(norm, lightInDir));
+		float noL = vecDot(norm, lightInDir);
 		float3 f0 = vecLerp(0.08f * specular * make_float3(1.f, 1.f, 1.f), diff, metallic);
 		float3 brdf_f = Fresnel(f0, voH);
 		//float g = GeometricVisibility(roughness, noV, noL, voH);
@@ -481,9 +491,12 @@ namespace cudaRTBDPTRegen
 		if (length(lightVertex->irrad) > 0.f && vecDot(norm, toLightVertexDir) > 0.f &&
 			!TracePrimitive(toLightVertex, traceResult, toLightVertexDist - M_FLT_BIAS_EPSILON, M_FLT_BIAS_EPSILON, false))
 		{
-			irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
+			if (length(lightVertex->irradDir) > M_FLT_EPSILON)
+				irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
 				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
-			irrad = LIGHTVERTEX_N * irrad;
+			else
+				irrad = lightVertex->irrad;
+			irrad = irrad;
 			irradDir = toLightVertexDir;
 		}
 	}
@@ -632,15 +645,12 @@ namespace cudaRTBDPTRegen
 				float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
 				GetLightFromRandLightVertices(pos + nl * M_FLT_BIAS_EPSILON, nl
 					, tracerData, lightFromLightVertex, toLightVertexDir);
-				float2 diffspecmask = make_float2(0.f, 1.f);
-				if (curand_uniform(tracerData.randstate) >= reflProb)
-				{
-					diffspecmask = make_float2(1.f, 0.f);
-				}
-				float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f), GetShadingResult(-1 * ray.dir, toLightVertexDir, lightFromLightVertex, nl, diff, metallic, roughness, specular, diffspecmask));
+				float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
+					, GetShadingResult(-1 * ray.dir, toLightVertexDir, lightFromLightVertex, nl, diff, metallic, roughness, specular
+					, make_float2(1.f - trans, 1.f)));
 				if (length(lightContribFromLightVertex) > 0.f)
 				{
-					sample.sampleTime++;
+					sample.sampleTime+=4;
 				}
 
 				if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
@@ -819,7 +829,7 @@ namespace cudaRTBDPTRegen
 		float3 f3CamDir = V32F3(camDir);
 		float3 f3CamRight = V32F3(camRight);
 
-		//if (g_uCurFrameN == 0)
+		if (g_uCurFrameN%3 == 0)
 		{
 			dim3 block(BLOCK_SIZE, 1, 1);
 			dim3 grid(LIGHTVERTEX_N / (block.x * LIGHTRAY_BOUND_MAX), 1, 1);
