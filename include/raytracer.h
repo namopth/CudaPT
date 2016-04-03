@@ -133,6 +133,8 @@ public:
 	inline void SetIsCudaMaterialDirty(const bool dirty = false) { m_bIsCudaMaterialDirty = dirty; }
 
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
+	bool TracePixel(const unsigned int x, const unsigned int y, const unsigned int width, const unsigned int height
+		, NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, HitResult& result);
 	bool AddModel(const char* filename);
 	void UpdateMaterialsDirtyFlag();
 

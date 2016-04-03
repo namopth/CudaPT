@@ -56,6 +56,7 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_fCamMoveSpeed(20.0f)
 	, m_uDeltaTimeSec(0)
 	, m_fFPS(0.f)
+	, m_bIsMLBClicked(false)
 {
 
 }
@@ -159,6 +160,12 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	model = glm::rotate(model, 0.0f, glm::vec3(0.0f, 1.0f, 0.0f));
 	NPMathHelper::Mat4x4 myProj = NPMathHelper::Mat4x4::perspectiveProjection(M_PI * 0.5f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
 
+	if (m_bIsMLBClicked)
+	{
+		m_bIsMLBClicked = false;
+		printf("test %f %f", m_v2ClickedPos._x, m_v2ClickedPos._y);
+	}
+
 	// Rendering - bgn
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -227,6 +234,11 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 		if (TwEventMouseButtonGLFW(msg.key, msg.action))
 		{
 			if (msg.key != GLFW_MOUSE_BUTTON_RIGHT || !m_bIsMRBHeld) break;
+		}
+		else if (msg.key == GLFW_MOUSE_BUTTON_LEFT || msg.action == GLFW_PRESS)
+		{
+			m_bIsMLBClicked = true;
+			m_v2ClickedPos = m_v2CurrentCursorPos;
 		}
 		if (msg.key == GLFW_MOUSE_BUTTON_RIGHT)
 			m_bIsMRBHeld = (msg.action == GLFW_PRESS);

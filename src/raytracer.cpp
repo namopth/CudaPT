@@ -85,6 +85,18 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 	return (minIntersect < M_INF);
 }
 
+bool RTScene::TracePixel(const uint x, const uint y, const uint width, const uint height, 
+	NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, HitResult& result)
+{
+	NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
+	camUp = camRight.cross(camDir).normalize();
+	float u = (2.f * ((float)x + 0.5f) / (float)width - 1.f) * tan(fov * 0.5f) * (float)width / (float)height;
+	float v = (2.f * ((float)y + 0.5f) / (float)height - 1.f) * tan(fov * 0.5f);
+	NPMathHelper::Vec3 dir = (camRight * u + camUp * v + camDir).normalize();
+	NPRayHelper::Ray ray(camPos, dir);
+	return Trace(ray, result);
+}
+
 void AssimpProcessNode(RTScene* mainScene, aiNode* node, const aiScene* scene)
 {
 	for (uint i = 0; i < node->mNumMeshes; i++)

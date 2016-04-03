@@ -31,6 +31,8 @@ protected:
 	float m_fExposure;
 
 	NPCamHelper::FlyCamera m_cam;
+	bool m_bIsMLBClicked;
+	NPMathHelper::Vec2 m_v2ClickedPos;
 	bool m_bIsMRBHeld;
 	bool m_bIsCamRotate;
 	NPMathHelper::Vec3 m_v3CamMoveDir;
