@@ -133,10 +133,12 @@ public:
 	inline void SetIsCudaMaterialDirty(const bool dirty = false) { m_bIsCudaMaterialDirty = dirty; }
 
 	bool Trace(const NPRayHelper::Ray &r, HitResult& result);
-	bool TracePixel(const unsigned int x, const unsigned int y, const unsigned int width, const unsigned int height
+	bool TracePixel(const float x, const float y, const unsigned int width, const unsigned int height
 		, NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, HitResult& result);
 	bool AddModel(const char* filename);
 	void UpdateMaterialsDirtyFlag();
+
+	void SetTWMaterialBar(const int matId = -1);
 
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;

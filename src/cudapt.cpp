@@ -158,11 +158,21 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	proj = glm::perspective(45.0f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
 	view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
 	model = glm::rotate(model, 0.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-	NPMathHelper::Mat4x4 myProj = NPMathHelper::Mat4x4::perspectiveProjection(M_PI * 0.5f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
+	NPMathHelper::Mat4x4 myProj = NPMathHelper::Mat4x4::perspectiveProjection(M_PI_2 * 0.5f, (float)m_iSizeW / (float)m_iSizeH, 0.1f, 100.0f);
 
 	if (m_bIsMLBClicked)
 	{
 		m_bIsMLBClicked = false;
+		RTScene::HitResult traceResult;
+		if (m_scene.TracePixel(m_v2ClickedPos._x, m_v2ClickedPos._y, m_iSizeW, m_iSizeH, m_cam.GetPos(), m_cam.GetDir()
+			, m_cam.GetUp(), M_PI_2 * 0.5f, traceResult))
+		{
+			m_scene.SetTWMaterialBar(m_scene.m_pTriangles[traceResult.objId].matInd);
+		}
+		else
+		{
+			m_scene.SetTWMaterialBar();
+		}
 		printf("test %f %f", m_v2ClickedPos._x, m_v2ClickedPos._y);
 	}
 
@@ -235,7 +245,7 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 		{
 			if (msg.key != GLFW_MOUSE_BUTTON_RIGHT || !m_bIsMRBHeld) break;
 		}
-		else if (msg.key == GLFW_MOUSE_BUTTON_LEFT || msg.action == GLFW_PRESS)
+		else if (msg.key == GLFW_MOUSE_BUTTON_LEFT && msg.action == GLFW_PRESS)
 		{
 			m_bIsMLBClicked = true;
 			m_v2ClickedPos = m_v2CurrentCursorPos;

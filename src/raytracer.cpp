@@ -85,14 +85,14 @@ bool RTScene::Trace(const NPRayHelper::Ray &r, HitResult& result)
 	return (minIntersect < M_INF);
 }
 
-bool RTScene::TracePixel(const uint x, const uint y, const uint width, const uint height, 
+bool RTScene::TracePixel(const float x, const float y, const uint width, const uint height, 
 	NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, HitResult& result)
 {
 	NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
 	camUp = camRight.cross(camDir).normalize();
-	float u = (2.f * ((float)x + 0.5f) / (float)width - 1.f) * tan(fov * 0.5f) * (float)width / (float)height;
-	float v = (2.f * ((float)y + 0.5f) / (float)height - 1.f) * tan(fov * 0.5f);
-	NPMathHelper::Vec3 dir = (camRight * u + camUp * v + camDir).normalize();
+	float u = (2.f * x / (float)width - 1.f) * tan(fov * 0.5f) * (float)width / (float)height;
+	float v = (2.f * y / (float)height - 1.f) * tan(fov * 0.5f);
+	NPMathHelper::Vec3 dir = (camRight * u - camUp * v + camDir).normalize();
 	NPRayHelper::Ray ray(camPos, dir);
 	return Trace(ray, result);
 }
@@ -246,7 +246,8 @@ bool RTScene::AddModel(const char* filename)
 	std::string dir = sPath.substr(0, sPath.find_last_of('\\'));
 	AssimpProcessNode(this, scene->mRootNode, scene);
 	AssimpProcessSceneMaterial(this, scene, dir);
-	updateTWBar();
+	//updateTWBar();
+	SetTWMaterialBar();
 
 	std::vector<uint32> tris;
 	for (auto &tri : m_pTriangles)
@@ -301,6 +302,38 @@ void RTScene::UpdateMaterialsDirtyFlag()
 				}
 			}
 		}
+	}
+}
+
+void RTScene::SetTWMaterialBar(const int matId)
+{
+	if (m_pMaterialBar)
+	{
+		TwRemoveAllVars(m_pMaterialBar);
+	}
+	else
+	{
+		m_pMaterialBar = TwNewBar("Material Setting");
+	}
+
+	if (matId < m_pMaterials.size() && matId > 0)
+	{
+		unsigned int i = matId;
+		std::string matName = "mat" + std::to_string(i);
+		std::string matPara = "group='" + matName + "'";
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Diffuse" + matName).c_str(), TW_TYPE_COLOR3F, m_pMaterials[i].diffuse._e, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveR" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._x, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveG" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._y, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("EmissiveB" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].emissive._z, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Transparency" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].transparency, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Specular" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].specular, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Metallic" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].metallic, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Roughness" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].roughness, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Anisotropic" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].anisotropic, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Sheen" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].sheen, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("SheenTint" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].sheenTint, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Clearcoat" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoat, matPara.c_str()));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("ClearcoatGloss" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoatGloss, matPara.c_str()));
 	}
 }
 
