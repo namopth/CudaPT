@@ -178,6 +178,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <CudaCompile Include="..\src\cudaRTPT.cu" />
     <CudaCompile Include="..\src\cudaRTPTRegen.cu" />
     <CudaCompile Include="..\src\cudaRTPTRR.cu" />
+    <CudaCompile Include="..\src\cudaRTPTStream.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
