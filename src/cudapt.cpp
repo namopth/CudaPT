@@ -173,7 +173,6 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 		{
 			m_scene.SetTWMaterialBar();
 		}
-		printf("test %f %f", m_v2ClickedPos._x, m_v2ClickedPos._y);
 	}
 
 	// Rendering - bgn

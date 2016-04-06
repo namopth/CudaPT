@@ -425,17 +425,17 @@ namespace cudaRTPTStream
 	__global__ void pt_traceSample_kernel(RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, PTPathVertex** pathStream, uint activePathStreamSize)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
-		if (x >= activePathStreamSize) return;
+		if (x >= activePathStreamSize || pathStream[x]->isTerminated) return;
 		PTPathVertex* procVertex = pathStream[x];
-
+		CURay ray = CURay(procVertex->pathVertexPos, procVertex->pathOutDir);
 		TracePrimitiveResult traceResult;
 		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))
 		{
-			RTTriangle* tri = &tracerData.triangles[traceResult.triId];
-			RTMaterial* mat = &tracerData.materials[tri->matInd];
-			RTVertex* v0 = &tracerData.vertices[tri->vertInd0];
-			RTVertex* v1 = &tracerData.vertices[tri->vertInd1];
-			RTVertex* v2 = &tracerData.vertices[tri->vertInd2];
+			RTTriangle* tri = &triangles[traceResult.triId];
+			RTMaterial* mat = &materials[tri->matInd];
+			RTVertex* v0 = &vertices[tri->vertInd0];
+			RTVertex* v1 = &vertices[tri->vertInd1];
+			RTVertex* v2 = &vertices[tri->vertInd2];
 			float2 uv0 = make_float2(v0->tex._x, v0->tex._y);
 			float2 uv1 = make_float2(v1->tex._x, v1->tex._y);
 			float2 uv2 = make_float2(v2->tex._x, v2->tex._y);
@@ -456,12 +456,12 @@ namespace cudaRTPTStream
 			float sheenTint;
 			float clearcoat;
 			float clearcoatGloss;
-			GetMaterialColors(mat, uv, tracerData.textures, diff, norm, emissive, trans, specular, metallic, roughness
+			GetMaterialColors(mat, uv, textures, diff, norm, emissive, trans, specular, metallic, roughness
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
 			{
 				// Get some random microfacet
-				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(tracerData.randstate), curand_uniform(tracerData.randstate)), roughness, nl);
+				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);
 
 				// Calculate flesnel
 				float voH = vecDot(-1 * ray.dir, hDir);
@@ -476,7 +476,7 @@ namespace cudaRTPTStream
 
 				CURay nextRay = ray;
 				float3 lightMulTerm;
-				RAYTYPE nextRayType = rayType;
+				RAYTYPE nextRayType = procVertex->pathType;
 
 				if (refrProb > 0)
 				{
@@ -504,7 +504,7 @@ namespace cudaRTPTStream
 				}
 
 				// Reflected
-				if (reflProb > 0 && curand_uniform(tracerData.randstate) < reflProb)
+				if (reflProb > 0 && curand_uniform(&procVertex->randState) < reflProb)
 				{
 					nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
 					// ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
@@ -526,7 +526,7 @@ namespace cudaRTPTStream
 				else
 				{
 					// Transmited
-					if (refrProb > 0 && curand_uniform(tracerData.randstate) < refrProb)
+					if (refrProb > 0 && curand_uniform(&procVertex->randState) < refrProb)
 					{
 						nextRay = CURay(ray.orig + (traceResult.dist + M_FLT_BIAS_EPSILON) * ray.dir + refrDir * M_FLT_BIAS_EPSILON, refrDir);
 						//ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
@@ -543,8 +543,8 @@ namespace cudaRTPTStream
 						float3 v = vecCross(w, u);
 						u = vecCross(v, w);
 
-						float r1 = 2.f * M_PI * curand_uniform(tracerData.randstate);
-						float r2cos = sqrtf(curand_uniform(tracerData.randstate));
+						float r1 = 2.f * M_PI * curand_uniform(&procVertex->randState);
+						float r2cos = sqrtf(curand_uniform(&procVertex->randState));
 						float r2sin = 1.f - r2cos*r2cos;
 						float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
@@ -567,14 +567,14 @@ namespace cudaRTPTStream
 					sample.pixelContrib = 0.f;
 
 				bool isAccum = (sample.pathDepth == 0);
-				if (curand_uniform(tracerData.randstate) >= sample.pixelContrib)
+				if (curand_uniform(&procVertex->randState) >= sample.pixelContrib)
 				{
 					sample.pixelContrib = 1.0f;
 					sample.pathDepth = 0;
 					sample.sampleTime++;
 					nextRayType = RAYTYPE_EYE;
-					float au = sample.uv.x + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
-					float av = sample.uv.y + (curand_uniform(tracerData.randstate) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
+					float au = sample.uv.x + (curand_uniform(&procVertex->randState) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
+					float av = sample.uv.y + (curand_uniform(&procVertex->randState) - 0.5f) / tracerData.winSize->y * tan(tracerData.fov * 0.5f);
 					float3 dir = normalize(*tracerData.camR * au + *tracerData.camU * av + *tracerData.camD);
 					nextRay = CURay(*tracerData.camOrig, dir);
 				}
