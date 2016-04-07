@@ -1,7 +1,7 @@
 #include "cudaRTCommon.h"
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 3
+#define NORMALRAY_BOUND_MAX 5
 
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 740
