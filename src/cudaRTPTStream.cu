@@ -462,9 +462,10 @@ namespace cudaRTPTStream
 		float3 f3CamRight = V32F3(camRight);
 
 		// Kernel go here
-		dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
-		dim3 renderGrid(ceil(width / (float)block.x), ceil(height / (float)block.y), 1);
-		pt_genPathQueue_kernel << < renderGrid, block >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+		dim3 block1(BLOCK_SIZE, 1, 1);
+		dim3 block2(BLOCK_SIZE, BLOCK_SIZE, 1);
+		dim3 renderGrid(ceil(width / (float)block2.x), ceil(height / (float)block2.y), 1);
+		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
 		cudaDeviceSynchronize();
 
@@ -473,19 +474,19 @@ namespace cudaRTPTStream
 		while (g_uPathQueueCur < g_uPathQueueSize || activePathStreamSize > 0)
 		{
 			uint tempActivePathStreamSize = activePathStreamSize;
-			pt_assignPathStream_kernel << < dim3(ceil((float)PATHSTREAM_SIZE / (float)block.x), 1, 1), block >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur, g_uPathQueueSize);
+			pt_assignPathStream_kernel << < dim3(ceil((float)PATHSTREAM_SIZE / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur, g_uPathQueueSize);
 			//readjust activePathStreamSize
 			activePathStreamSize = min((uint)PATHSTREAM_SIZE, activePathStreamSize + (g_uPathQueueSize - g_uPathQueueCur));
 			g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
 			cudaDeviceSynchronize();
 
-			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block.x), 1, 1), block >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
+			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
 			cudaDeviceSynchronize();
 			//compact pathstream and find activePathStreamSize value
 			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 		}
-		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block.x), 1, 1), block >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
 
 		// Copy result to host
 		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
