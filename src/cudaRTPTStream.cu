@@ -404,6 +404,16 @@ namespace cudaRTPTStream
 		CUFREE(g_devAccResultData);
 	}
 
+	//struct ray_greater_compare
+	//{
+	//	__hd__ bool operator()(const PTPathVertex* vert1, const PTPathVertex* vert2)
+	//	{
+	//		int vert1Score = (vert1->pathOutDir.x > 0) + (vert1->pathOutDir.y > 0) + (vert1->pathOutDir.z > 0);
+	//		int vert2Score = (vert2->pathOutDir.x > 0) + (vert2->pathOutDir.y > 0) + (vert2->pathOutDir.z > 0);
+	//		return vert1Score > vert2Score;
+	//	}
+	//};
+
 	struct is_terminated
 	{
 		__hd__ bool operator()(const PTPathVertex* vert)
@@ -462,7 +472,7 @@ namespace cudaRTPTStream
 		float3 f3CamRight = V32F3(camRight);
 
 		// Kernel go here
-		dim3 block1(BLOCK_SIZE, 1, 1);
+		dim3 block1(BLOCK_SIZE*BLOCK_SIZE, 1, 1);
 		dim3 block2(BLOCK_SIZE, BLOCK_SIZE, 1);
 		dim3 renderGrid(ceil(width / (float)block2.x), ceil(height / (float)block2.y), 1);
 		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
@@ -479,6 +489,9 @@ namespace cudaRTPTStream
 			activePathStreamSize = min((uint)PATHSTREAM_SIZE, activePathStreamSize + (g_uPathQueueSize - g_uPathQueueCur));
 			g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
 			cudaDeviceSynchronize();
+
+			//test sorting ray for more coherent tracing -> it does not improve performance
+			//thrust::sort(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, ray_greater_compare());
 
 			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
 			cudaDeviceSynchronize();
