@@ -172,6 +172,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="..\src\cudaRTBDPTRegen.cu" />
+    <CudaCompile Include="..\src\cudaRTPTStreamRegen.cu" />
     <CudaCompile Include="..\src\cudaRTBVHDebug.cu" />
     <CudaCompile Include="..\src\cudaRTCommon.cu" />
     <CudaCompile Include="..\src\cudaRTDebug.cu" />
