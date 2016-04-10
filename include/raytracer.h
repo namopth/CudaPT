@@ -5,6 +5,7 @@ DEFINE_RT(Cuda PT Regeneration, cudaRTPTRegen)
 DEFINE_RT(Cuda PT Stream Compaction, cudaRTPTStream)
 DEFINE_RT(Cuda PT Stream Compaction Regen, cudaRTPTStreamRegen)
 DEFINE_RT(Cuda BDPT Regeneration, cudaRTBDPTRegen)
+DEFINE_RT(Cuda BDPT Stream Compaction, cudaRTBDPTStream)
 DEFINE_RT(Cuda Debug, cudaRTDebug)
 DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #endif

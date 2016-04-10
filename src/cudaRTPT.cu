@@ -98,11 +98,6 @@ namespace cudaRTPT
 	__device__ ShootRayResult pt0_normalRay(const CURay& ray, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures, curandState *randstate)
 	{
 		ShootRayResult rayResult;
-		if (depth > 5)
-		{
-			rayResult.light = make_float3(0.f, 0.f, 0.f);
-			return rayResult;
-		}
 
 		TracePrimitiveResult traceResult;
 		if (TracePrimitive(ray, traceResult, M_INF, M_FLT_BIAS_EPSILON, false))

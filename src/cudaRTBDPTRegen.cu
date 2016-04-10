@@ -4,7 +4,7 @@
 #define NORMALRAY_BOUND_MAX 5
 
 #define LIGHTRAY_BOUND_MAX 5
-#define LIGHTVERTEX_N 740
+#define LIGHTVERTEX_N 640
 
 namespace cudaRTBDPTRegen
 {
