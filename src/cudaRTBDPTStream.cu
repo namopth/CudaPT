@@ -36,11 +36,13 @@ namespace cudaRTBDPTStream
 	};
 
 	LightVertex* g_devLightVertices = nullptr;
+	uint g_uLightVerticesSize = 0;
 	uint* g_devLightTri = nullptr;
 	uint g_lightTriN = 0;
 
 	void freeLightPathMem()
 	{
+		g_uLightVerticesSize = 0;
 		g_lightTriN = 0;
 		CUFREE(g_devLightVertices);
 		CUFREE(g_devLightTri);
@@ -96,18 +98,36 @@ void updateLightTriCudaMem(RTScene* scene)
 		uint pathSampleDepth;
 		curandState randState;
 
+		// for connecting light path
+		float3 pathInMulTerm;
+		float3 pathInDir;
+		float3 origNorm;
+		float3 origDiff;
+		float origMetallic;
+		float origRoughness;
+		float origSpecular;
+		float origTrans;
+
 		__device__ PTPathVertex(uint _isTerminated, uint2 _pathPixel, float3 _pathOutDir, float3 _pathVertexPos, RAYTYPE _pathType, curandState _randState)
 			: isTerminated(_isTerminated)
 			, pathPixel(_pathPixel)
 			, pathOutDir(_pathOutDir)
 			, pathVertexPos(_pathVertexPos)
-			, pathOutMulTerm(make_float3(1.f,1.f,1.f))
+			, pathOutMulTerm(make_float3(1.f, 1.f, 1.f))
 			, pathType(_pathType)
 			, pathSample(make_float3(0.f, 0.f, 0.f))
 			, pathAccumSample(make_float3(0.f, 0.f, 0.f))
 			, pathSampleN(0)
 			, pathSampleDepth(0)
 			, randState(_randState)
+			, pathInMulTerm(make_float3(0.f, 0.f, 0.f))
+			, pathInDir(make_float3(0.f, 0.f, 0.f))
+			, origNorm(make_float3(0.f, 1.f, 0.f))
+			, origDiff(make_float3(0.f, 0.f, 0.f))
+			, origMetallic(0.f)
+			, origRoughness(0.f)
+			, origSpecular(0.f)
+			, origTrans(0.f)
 		{}
 	};
 
@@ -115,6 +135,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	uint g_uPathQueueCur = 0;
 	uint g_uPathQueueSize = 0;
 	PTPathVertex** g_devPathStream = nullptr;
+	PTPathVertex** g_devEyeLightConPathStream = nullptr;
 	uint g_uPathStreamSize = PATHSTREAM_SIZE;
 
 	void freeStreamMem()
@@ -122,6 +143,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		g_uPathQueueCur = g_uPathQueueSize = 0;
 		CUFREE(g_devPathQueue);
 		CUFREE(g_devPathStream);
+		CUFREE(g_devEyeLightConPathStream);
 	}
 
 	void allocateStreamMem(uint queueSize = 480000)
@@ -132,6 +154,9 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_devPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
+
+		HANDLE_ERROR(cudaMalloc((void**)&g_devEyeLightConPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
+		HANDLE_ERROR(cudaMemset((void*)g_devEyeLightConPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
 	}
 
 #pragma region SHADING_FUNC
@@ -380,8 +405,8 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				//if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
-				//	pixelContrib = 0.f;
+				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
 				{
@@ -544,6 +569,15 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				procVertex->pathSample = procVertex->pathSample + vecMul(emissive , procVertex->pathOutMulTerm);
 
+				procVertex->origDiff = diff;
+				procVertex->pathInDir = -1 * ray.dir;
+				procVertex->origNorm = nl;
+				procVertex->origRoughness = roughness;
+				procVertex->origMetallic = metallic;
+				procVertex->origSpecular = specular;
+				procVertex->origTrans = trans;
+				procVertex->pathInMulTerm = procVertex->pathOutMulTerm;
+
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
 				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
@@ -559,10 +593,11 @@ void updateLightTriCudaMem(RTScene* scene)
 				{
 					procVertex->pathOutMulTerm = vecMul(procVertex->pathOutMulTerm, lightMulTerm);
 					procVertex->pathOutDir = nextRay.dir;
-					procVertex->pathVertexPos = nextRay.orig;
-					procVertex->pathType = nextRayType;
 					procVertex->pathSampleDepth++;
 				}
+				procVertex->pathVertexPos = nextRay.orig;
+				procVertex->pathType = nextRayType;
+
 			}
 		}
 		else
@@ -670,6 +705,84 @@ void updateLightTriCudaMem(RTScene* scene)
 		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
+	__device__ float3 GetShadingResult(const float3& lightOutDir, const float3& lightInDir, const float3& lightInIrrad, const float3& norm,
+		const float3& diff, const float metallic, const float roughness, const float specular, const float2 diffspec)
+	{
+		if (vecDot(norm, lightInDir) <= 0.f)
+			return make_float3(0.f, 0.f, 0.f);
+
+		float3 h = normalize(lightOutDir + lightInDir);
+
+		float voH = vecDot(lightOutDir, h);
+		float noV = vecDot(norm, lightOutDir);
+		float noH = vecDot(norm, h);
+		float noL = vecDot(norm, lightInDir);
+		float3 f0 = vecLerp(0.08f * specular * make_float3(1.f, 1.f, 1.f), diff, metallic);
+		float3 brdf_f = Fresnel(f0, voH);
+		//float g = GeometricVisibility(roughness, noV, noL, voH);
+		float d = D_GGX(roughness, noH);
+		float v = Vis_SmithJointApprox(roughness, noV, noL);
+		// Microfacet specular = D*G*F / (4*NoL*NoV)
+		float3 specIrrad = d*v*brdf_f;// vecMul(d*g*brdf_f / (4.f * noV), lightInIrrad);
+		float3 diffIrrad = vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), Diffuse(diff, roughness, noV, noL, voH));//vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), diff / M_PI);
+		return vecMul(lightInIrrad*noL, diffspec.y*specIrrad + diffspec.x*diffIrrad);
+	}
+
+	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, LightVertex* lightVertices, uint lightVerticesSize, curandState* randstate, float3& irrad, float3& irradDir)
+	{
+		//LightVertex dummy;
+		//dummy.diff = make_float3(1.f, 1.f, 1.f);
+		//dummy.irrad = make_float3(1.f, 0.f, 0.f);
+		//dummy.pos = make_float3(0.f, 0.f, 0.f);
+		//dummy.norm = dummy.irradDir = normalize(pos - dummy.pos);
+		//dummy.roughness = 0.5f;
+		//dummy.specular = 0.5f;
+		//dummy.metallic = 0.f;
+
+		irrad = make_float3(0.f, 0.f, 0.f);
+		uint lightVert = curand_uniform(randstate) * lightVerticesSize;
+		LightVertex* lightVertex = &lightVertices[lightVert];
+		float3 toLightVertexDir = normalize(lightVertex->pos - pos);
+		float toLightVertexDist = length(lightVertex->pos - pos);
+
+		CURay toLightVertex(pos, toLightVertexDir);
+		TracePrimitiveResult traceResult;
+		if (length(lightVertex->irrad) > 0.f && vecDot(norm, toLightVertexDir) > 0.f &&
+			!TracePrimitive(toLightVertex, traceResult, toLightVertexDist - M_FLT_BIAS_EPSILON, M_FLT_BIAS_EPSILON, false))
+		{
+			if (length(lightVertex->irradDir) > M_FLT_EPSILON)
+				irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
+				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
+			else
+				irrad = lightVertex->irrad;
+			irrad = irrad;
+			irradDir = toLightVertexDir;
+		}
+	}
+
+
+	__global__ void pt_connectEyeLightPath_kernel(PTPathVertex** eyeStream, uint eyeStreamSize, LightVertex* lightVertices, uint lightVerticesSize)
+	{
+		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
+		if (ind >= eyeStreamSize) return;
+
+		PTPathVertex* eyePath = eyeStream[ind];
+		float3 lightFromLightVertex = make_float3(0.f, 0.f, 0.f);
+		float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
+		GetLightFromRandLightVertices(eyePath->pathVertexPos + eyePath->origNorm * M_FLT_BIAS_EPSILON, eyePath->origNorm
+			, lightVertices, lightVerticesSize, &eyePath->randState, lightFromLightVertex, toLightVertexDir);
+		float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
+			, GetShadingResult(eyePath->pathInDir, toLightVertexDir, lightFromLightVertex, eyePath->origNorm
+			, eyePath->origDiff, eyePath->origMetallic, eyePath->origRoughness, eyePath->origSpecular
+			, make_float2(1.f - eyePath->origTrans, 1.f)));
+
+		if (length(lightContribFromLightVertex) > 0.f)
+		{
+			eyePath->pathAccumSample = eyePath->pathAccumSample + vecMul(lightContribFromLightVertex, eyePath->pathInMulTerm);
+			eyePath->pathSampleN += 4;
+		}
+	}
+
 	__global__ void pt_assignPathStream_kernel(PTPathVertex** pathStream, uint pathStreamSize, PTPathVertex* pathQueue, uint pathQueueCur, uint pathQueueSize)
 	{
 		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
@@ -738,6 +851,14 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	};
 
+	struct is_connectToLightPath
+	{
+		__hd__ bool operator()(const PTPathVertex* vert)
+		{
+			return vert->pathType == RAYTYPE_DIFF;
+		}
+	};
+
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
 	{
@@ -794,7 +915,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		dim3 renderGrid(ceil(width / (float)block2.x), ceil(height / (float)block2.y), 1);
 
 		// light paths
-		if (g_uCurFrameN == 0)
+		if (g_uCurFrameN % 3 == 0)
 		{
 			uint lightPathStreamSizeCap = min((uint)PATHSTREAM_SIZE, (uint)(LIGHTVERTEX_N / LIGHTRAY_BOUND_MAX));
 			pt_genLightPathQueue_kernel << < dim3(ceil((float)lightPathStreamSizeCap / (float)block1.x), 1, 1), block1 >> >
@@ -803,7 +924,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			cudaDeviceSynchronize();
 
 			uint activePathStreamSize = 0;
-			uint curLightVerticesSize = lightPathStreamSizeCap;
+			g_uLightVerticesSize = lightPathStreamSizeCap;
 			g_uPathQueueCur = 0;
 			while (g_uPathQueueCur < lightPathStreamSizeCap || activePathStreamSize > 0)
 			{
@@ -816,12 +937,9 @@ void updateLightTriCudaMem(RTScene* scene)
 				g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
 				cudaDeviceSynchronize();
 
-				//test sorting ray for more coherent tracing -> it does not improve performance
-				//thrust::sort(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, ray_greater_compare());
-
 				pt_traceLight_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize
-					, g_devLightVertices, curLightVerticesSize);
-				curLightVerticesSize += activePathStreamSize;
+					, g_devLightVertices, g_uLightVerticesSize);
+				g_uLightVerticesSize += activePathStreamSize;
 				cudaDeviceSynchronize();
 				//compact pathstream and find activePathStreamSize value
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
@@ -842,19 +960,30 @@ void updateLightTriCudaMem(RTScene* scene)
 			int assignableStreamSlot = min((uint)PATHSTREAM_SIZE - activePathStreamSize, g_uPathQueueSize - g_uPathQueueCur);
 			if (assignableStreamSlot > 0)
 				pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur, g_uPathQueueSize);
+
 			//readjust activePathStreamSize
 			activePathStreamSize = min((uint)PATHSTREAM_SIZE, activePathStreamSize + (g_uPathQueueSize - g_uPathQueueCur));
 			g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
 			cudaDeviceSynchronize();
 
-			//test sorting ray for more coherent tracing -> it does not improve performance
-			//thrust::sort(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, ray_greater_compare());
-
+			//tracing process
 			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
 			cudaDeviceSynchronize();
+
 			//compact pathstream and find activePathStreamSize value
 			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
+
+			//gen connectionpathstream
+			PTPathVertex** conPathStreamEndItr = thrust::copy_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, g_devEyeLightConPathStream, is_connectToLightPath());
+			uint activeConPathStreamSize = conPathStreamEndItr - g_devEyeLightConPathStream;
+
+			//connect eye and light path stream
+			if (activeConPathStreamSize > 0)
+			{
+				pt_connectEyeLightPath_kernel << < dim3(ceil((float)activeConPathStreamSize / (float)block1.x), 1, 1), block1 >> >
+					(g_devEyeLightConPathStream, activeConPathStreamSize, g_devLightVertices, g_uLightVerticesSize);
+			}
 		}
 		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
 
