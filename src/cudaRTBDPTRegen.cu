@@ -213,9 +213,9 @@ namespace cudaRTBDPTRegen
 			float r2sin = 1.f - r2cos*r2cos;
 			float3 diffDir = normalize(w * r2cos + u * r2sin * cosf(r1) + v * r2sin * sinf(r1));
 
-			lightRay = CURay(triPos + triNorm * M_FLT_BIAS_EPSILON, diffDir);
+			nextRay = CURay(triPos + triNorm * M_FLT_BIAS_EPSILON, diffDir);
 			rayIrrad = emissive;// *(float)tracerData.lightTriN;
-			rayType = RAYTYPE_LIGHT;
+			nextRayType = RAYTYPE_LIGHT;
 
 			resultVertex.irrad = rayIrrad;
 			resultVertex.irradDir = make_float3(0.f,0.f,0.f);
@@ -355,14 +355,14 @@ namespace cudaRTBDPTRegen
 				}
 			}
 
-			if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
-				lightMulTerm = make_float3(0.f,0.f,0.f);
+			//if (rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC)
+			//	lightMulTerm = make_float3(0.f,0.f,0.f);
 
 			lightMulTerm = vecMul(lightMulTerm, rayIrrad);
-			if (curand_uniform(tracerData.randstate) >= length(lightMulTerm))
-			{
-				nextRay = CURay();
-			}
+			//if (curand_uniform(tracerData.randstate) >= length(lightMulTerm))
+			//{
+			//	nextRay = CURay();
+			//}
 
 			resultVertex.irrad = rayIrrad;
 			resultVertex.irradDir = -1 * lightRay.dir;

@@ -293,7 +293,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 			lightVertices[curLightVerticesSize + x].irrad = procVertex->pathSample;
 			lightVertices[curLightVerticesSize + x].irradDir = -1 * ray.dir;
-			lightVertices[curLightVerticesSize + x].norm = norm;
+			lightVertices[curLightVerticesSize + x].norm = nl;
 			lightVertices[curLightVerticesSize + x].pos = triPos;
 			lightVertices[curLightVerticesSize + x].diff = diff;
 			lightVertices[curLightVerticesSize + x].emissive = emissive;
@@ -970,10 +970,6 @@ void updateLightTriCudaMem(RTScene* scene)
 			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
 			cudaDeviceSynchronize();
 
-			//compact pathstream and find activePathStreamSize value
-			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
-			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
-
 			//gen connectionpathstream
 			PTPathVertex** conPathStreamEndItr = thrust::copy_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, g_devEyeLightConPathStream, is_connectToLightPath());
 			uint activeConPathStreamSize = conPathStreamEndItr - g_devEyeLightConPathStream;
@@ -984,6 +980,10 @@ void updateLightTriCudaMem(RTScene* scene)
 				pt_connectEyeLightPath_kernel << < dim3(ceil((float)activeConPathStreamSize / (float)block1.x), 1, 1), block1 >> >
 					(g_devEyeLightConPathStream, activeConPathStreamSize, g_devLightVertices, g_uLightVerticesSize);
 			}
+
+			//compact pathstream and find activePathStreamSize value
+			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
+			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 		}
 		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
 
