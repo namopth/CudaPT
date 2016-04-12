@@ -642,20 +642,6 @@ namespace cudaRTBDPTRegen
 				float nextRayResult;
 
 				float3 lightContribFromLightVertex = make_float3(0.f, 0.f, 0.f);
-				if (rayType != RAYTYPE_SPEC)
-				{
-					float3 lightFromLightVertex = make_float3(0.f, 0.f, 0.f);
-					float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
-					GetLightFromRandLightVertices(pos + nl * M_FLT_BIAS_EPSILON, nl
-						, tracerData, lightFromLightVertex, toLightVertexDir);
-					lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
-						, GetShadingResult(-1 * ray.dir, toLightVertexDir, lightFromLightVertex, nl, diff, metallic, roughness, specular
-						, make_float2(1.f - trans, 1.f)));
-					if (length(lightContribFromLightVertex) > 0.f)
-					{
-						sample.sampleTime += 4;
-					}
-				}
 
 				if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
 					sample.pixelContrib = 0.f;
@@ -675,6 +661,20 @@ namespace cudaRTBDPTRegen
 				else
 				{
 					sample.pathDepth++;
+					if (nextRayType == RAYTYPE_DIFF)
+					{
+						float3 lightFromLightVertex = make_float3(0.f, 0.f, 0.f);
+						float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
+						GetLightFromRandLightVertices(pos + nl * M_FLT_BIAS_EPSILON, nl
+							, tracerData, lightFromLightVertex, toLightVertexDir);
+						lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
+							, GetShadingResult(-1 * ray.dir, toLightVertexDir, lightFromLightVertex, nl, diff, metallic, roughness, specular
+							, make_float2(1.f - trans, 1.f)));
+						if (length(lightContribFromLightVertex) > 0.f)
+						{
+							sample.sampleTime += 4;
+						}
+					}
 				}
 
 				pt0_normalRay<depth + 1>(nextRay, nextRayType, sample, tracerData);

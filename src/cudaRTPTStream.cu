@@ -4,7 +4,7 @@
 #include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 10
+#define NORMALRAY_BOUND_MAX 2
 #define PATHSTREAM_SIZE 1E4*64
 namespace cudaRTPTStream
 {

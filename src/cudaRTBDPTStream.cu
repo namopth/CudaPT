@@ -783,10 +783,10 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
-	__global__ void pt_assignPathStream_kernel(PTPathVertex** pathStream, uint pathStreamSize, PTPathVertex* pathQueue, uint pathQueueCur, uint pathQueueSize)
+	__global__ void pt_assignPathStream_kernel(PTPathVertex** pathStream, uint pathStreamSize, PTPathVertex* pathQueue, uint pathQueueCur, uint pathQueueSize, uint assignableSlot)
 	{
 		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
-		if (ind < pathQueueSize - pathStreamSize)
+		if (ind < assignableSlot)
 		{
 			int pathStreamInd = pathStreamSize + ind;
 			int pathQueueInd = pathQueueCur + ind;
@@ -921,7 +921,6 @@ void updateLightTriCudaMem(RTScene* scene)
 			pt_genLightPathQueue_kernel << < dim3(ceil((float)lightPathStreamSizeCap / (float)block1.x), 1, 1), block1 >> >
 				(g_uCurFrameN, WangHash(g_uCurFrameN), g_devLightTri, g_lightTriN, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathQueue, lightPathStreamSizeCap
 				, g_devLightVertices, 0);
-			cudaDeviceSynchronize();
 
 			uint activePathStreamSize = 0;
 			g_uLightVerticesSize = lightPathStreamSizeCap;
@@ -929,18 +928,17 @@ void updateLightTriCudaMem(RTScene* scene)
 			while (g_uPathQueueCur < lightPathStreamSizeCap || activePathStreamSize > 0)
 			{
 				uint tempActivePathStreamSize = activePathStreamSize;
-				int assignableStreamSlot = min((uint)PATHSTREAM_SIZE - activePathStreamSize, g_uPathQueueSize - g_uPathQueueCur);
+				int assignableStreamSlot = min(lightPathStreamSizeCap - activePathStreamSize, lightPathStreamSizeCap - g_uPathQueueCur);
 				if (assignableStreamSlot > 0)
-					pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur, lightPathStreamSizeCap);
+					pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
+					, g_uLightVerticesSize, assignableStreamSlot);
 				//readjust activePathStreamSize
-				activePathStreamSize = min((uint)lightPathStreamSizeCap, activePathStreamSize + (lightPathStreamSizeCap - g_uPathQueueCur));
-				g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
-				cudaDeviceSynchronize();
+				activePathStreamSize += assignableStreamSlot;
+				g_uPathQueueCur += assignableStreamSlot;
 
 				pt_traceLight_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize
 					, g_devLightVertices, g_uLightVerticesSize);
 				g_uLightVerticesSize += activePathStreamSize;
-				cudaDeviceSynchronize();
 				//compact pathstream and find activePathStreamSize value
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 				activePathStreamSize = compactedStreamEndItr - g_devPathStream;
@@ -950,7 +948,6 @@ void updateLightTriCudaMem(RTScene* scene)
 		// eye paths
 		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
-		cudaDeviceSynchronize();
 
 		uint activePathStreamSize = 0;
 		g_uPathQueueCur = 0;
@@ -959,16 +956,19 @@ void updateLightTriCudaMem(RTScene* scene)
 			uint tempActivePathStreamSize = activePathStreamSize;
 			int assignableStreamSlot = min((uint)PATHSTREAM_SIZE - activePathStreamSize, g_uPathQueueSize - g_uPathQueueCur);
 			if (assignableStreamSlot > 0)
-				pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur, g_uPathQueueSize);
+				pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
+				, g_uPathQueueSize, assignableStreamSlot);
 
 			//readjust activePathStreamSize
-			activePathStreamSize = min((uint)PATHSTREAM_SIZE, activePathStreamSize + (g_uPathQueueSize - g_uPathQueueCur));
-			g_uPathQueueCur += activePathStreamSize - tempActivePathStreamSize;
-			cudaDeviceSynchronize();
+			activePathStreamSize += assignableStreamSlot;
+			g_uPathQueueCur += assignableStreamSlot;
 
 			//tracing process
 			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
-			cudaDeviceSynchronize();
+
+			//compact pathstream and find activePathStreamSize value
+			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
+			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 
 			//gen connectionpathstream
 			PTPathVertex** conPathStreamEndItr = thrust::copy_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, g_devEyeLightConPathStream, is_connectToLightPath());
@@ -981,9 +981,6 @@ void updateLightTriCudaMem(RTScene* scene)
 					(g_devEyeLightConPathStream, activeConPathStreamSize, g_devLightVertices, g_uLightVerticesSize);
 			}
 
-			//compact pathstream and find activePathStreamSize value
-			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
-			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 		}
 		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
 
