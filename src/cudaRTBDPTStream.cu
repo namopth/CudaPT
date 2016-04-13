@@ -930,8 +930,10 @@ void updateLightTriCudaMem(RTScene* scene)
 				uint tempActivePathStreamSize = activePathStreamSize;
 				int assignableStreamSlot = min(lightPathStreamSizeCap - activePathStreamSize, lightPathStreamSizeCap - g_uPathQueueCur);
 				if (assignableStreamSlot > 0)
+				{
 					pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
-					, g_uLightVerticesSize, assignableStreamSlot);
+						, g_uLightVerticesSize, assignableStreamSlot);
+				}
 				//readjust activePathStreamSize
 				activePathStreamSize += assignableStreamSlot;
 				g_uPathQueueCur += assignableStreamSlot;
@@ -943,6 +945,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 				activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 			}
+			std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
 		}
 
 		// eye paths
