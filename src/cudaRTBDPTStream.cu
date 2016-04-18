@@ -945,7 +945,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 				activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 			}
-			std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
+			//std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
 		}
 
 		// eye paths

@@ -108,6 +108,28 @@ void updateLightTriCudaMem(RTScene* scene)
 		float origSpecular;
 		float origTrans;
 
+		__device__ PTPathVertex()
+			: isTerminated(true)
+			, pathPixel(make_uint2(0,0))
+			, pathOutDir(make_float3(0.f, 1.f, 0.f))
+			, pathVertexPos(make_float3(0.f, 0.f, 0.f))
+			, pathOutMulTerm(make_float3(1.f, 1.f, 1.f))
+			, pathType(RAYTYPE_EYE)
+			, pathSample(make_float3(0.f, 0.f, 0.f))
+			, pathAccumSample(make_float3(0.f, 0.f, 0.f))
+			, pathSampleN(0)
+			, pathSampleDepth(0)
+			, randState()
+			, pathInMulTerm(make_float3(0.f, 0.f, 0.f))
+			, pathInDir(make_float3(0.f, 0.f, 0.f))
+			, origNorm(make_float3(0.f, 1.f, 0.f))
+			, origDiff(make_float3(0.f, 0.f, 0.f))
+			, origMetallic(0.f)
+			, origRoughness(0.f)
+			, origSpecular(0.f)
+			, origTrans(0.f)
+		{}
+
 		__device__ PTPathVertex(uint _isTerminated, uint2 _pathPixel, float3 _pathOutDir, float3 _pathVertexPos, RAYTYPE _pathType, curandState _randState)
 			: isTerminated(_isTerminated)
 			, pathPixel(_pathPixel)
@@ -131,6 +153,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		{}
 	};
 
+	uint* g_devTempPathQueue = nullptr;
 	PTPathVertex* g_devPathQueue = nullptr;
 	uint g_uPathQueueCur = 0;
 	uint g_uPathQueueSize = 0;
@@ -141,6 +164,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	void freeStreamMem()
 	{
 		g_uPathQueueCur = g_uPathQueueSize = 0;
+		CUFREE(g_devTempPathQueue);
 		CUFREE(g_devPathQueue);
 		CUFREE(g_devPathStream);
 		CUFREE(g_devEyeLightConPathStream);
@@ -151,6 +175,9 @@ void updateLightTriCudaMem(RTScene* scene)
 		g_uPathQueueSize = queueSize;
 		HANDLE_ERROR(cudaMalloc((void**)&g_devPathQueue, sizeof(PTPathVertex) * g_uPathQueueSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devPathQueue, 0, sizeof(PTPathVertex) * g_uPathQueueSize));
+
+		HANDLE_ERROR(cudaMalloc((void**)&g_devTempPathQueue, sizeof(uint) * g_uPathQueueSize * 2));
+		HANDLE_ERROR(cudaMemset((void*)g_devTempPathQueue, 0, sizeof(uint) * g_uPathQueueSize * 2));
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_devPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
@@ -237,6 +264,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
+	float* g_devResultVarData = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -705,6 +733,50 @@ void updateLightTriCudaMem(RTScene* scene)
 		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
+	__global__ void pt_genTempAdapPathQueue_kernel(float width, float height, uint32 hashedFrameN
+		, float* genChance, uint* pathQueue)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+		uint y = blockIdx.y * blockDim.y + threadIdx.y;
+
+		if (x >= width || y >= height) return;
+
+		uint ind = (y * width + x);
+
+		curandState randstate;
+		curand_init(hashedFrameN + ind, 0, 0, &randstate);
+
+		pathQueue[ind] = x + y * width;
+
+		if (curand_uniform(&randstate) > 0.4f) // genChance[ind])
+		{
+			pathQueue[ind] = 0 - 1;
+		}
+	}
+
+	__global__ void pt_convTempPathQueue_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
+		float width, float height, uint32 frameN, uint32 hashedFrameN, uint* tempPathQueue, uint tempPathQueueSize, PTPathVertex* pathQueue)
+	{
+		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
+		if (ind >= tempPathQueueSize) return;
+
+		uint pathInd = tempPathQueue[ind];
+		uint y = pathInd / width;
+		uint x = pathInd - y * width;
+
+		float u = (2.f * ((float)x + 0.5f) / width - 1.f) * tan(fov * 0.5f) * width / height;
+		float v = (2.f * ((float)y + 0.5f) / height - 1.f) * tan(fov * 0.5f);
+
+		curandState randstate;
+		curand_init(hashedFrameN + ind, 0, 0, &randstate);
+		float au = u + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+		float av = v + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+
+		float3 dir = normalize(camRight * au + camUp * av + camDir);
+
+		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
+	}
+
 	__device__ float3 GetShadingResult(const float3& lightOutDir, const float3& lightInDir, const float3& lightInIrrad, const float3& norm,
 		const float3& diff, const float metallic, const float roughness, const float specular, const float2 diffspec)
 	{
@@ -829,6 +901,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
+		CUFREE(g_devResultVarData);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
 	}
@@ -842,6 +915,14 @@ void updateLightTriCudaMem(RTScene* scene)
 	//		return vert1Score > vert2Score;
 	//	}
 	//};
+
+	struct is_temppathqueue_terminated
+	{
+		__hd__ bool operator()(const uint& vert)
+		{
+			return (vert+1 == 0);
+		}
+	};
 
 	struct is_terminated
 	{
@@ -858,6 +939,46 @@ void updateLightTriCudaMem(RTScene* scene)
 			return vert->pathType == RAYTYPE_DIFF;
 		}
 	};
+
+	void TracePathQueue(uint pathQueueSize)
+	{
+		dim3 block1(BLOCK_SIZE*BLOCK_SIZE, 1, 1);
+		dim3 block2(BLOCK_SIZE, BLOCK_SIZE, 1);
+
+		uint activePathStreamSize = 0;
+		g_uPathQueueCur = 0;
+		while (g_uPathQueueCur < pathQueueSize || activePathStreamSize > 0)
+		{
+			uint tempActivePathStreamSize = activePathStreamSize;
+			int assignableStreamSlot = min((uint)PATHSTREAM_SIZE - activePathStreamSize, pathQueueSize - g_uPathQueueCur);
+			if (assignableStreamSlot > 0)
+				pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
+				, pathQueueSize, assignableStreamSlot);
+
+			//readjust activePathStreamSize
+			activePathStreamSize += assignableStreamSlot;
+			g_uPathQueueCur += assignableStreamSlot;
+
+			//tracing process
+			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
+
+			//compact pathstream and find activePathStreamSize value
+			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
+			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
+
+			//gen connectionpathstream
+			PTPathVertex** conPathStreamEndItr = thrust::copy_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, g_devEyeLightConPathStream, is_connectToLightPath());
+			uint activeConPathStreamSize = conPathStreamEndItr - g_devEyeLightConPathStream;
+
+			//connect eye and light path stream
+			if (activeConPathStreamSize > 0)
+			{
+				pt_connectEyeLightPath_kernel << < dim3(ceil((float)activeConPathStreamSize / (float)block1.x), 1, 1), block1 >> >
+					(g_devEyeLightConPathStream, activeConPathStreamSize, g_devLightVertices, g_uLightVerticesSize);
+			}
+
+		}
+	}
 
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp, float fov, RTScene* scene
 		, float width, float height, float* result)
@@ -904,6 +1025,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devResultVarData);
+			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -945,47 +1068,98 @@ void updateLightTriCudaMem(RTScene* scene)
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
 				activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 			}
-			std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
+			//std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
 		}
 
-		// eye paths
-		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
-			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
-
-		uint activePathStreamSize = 0;
-		g_uPathQueueCur = 0;
-		while (g_uPathQueueCur < g_uPathQueueSize || activePathStreamSize > 0)
+		if (g_uCurFrameN == 0)
 		{
-			uint tempActivePathStreamSize = activePathStreamSize;
-			int assignableStreamSlot = min((uint)PATHSTREAM_SIZE - activePathStreamSize, g_uPathQueueSize - g_uPathQueueCur);
-			if (assignableStreamSlot > 0)
-				pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
-				, g_uPathQueueSize, assignableStreamSlot);
+			//float time;
+			//cudaEvent_t start, stop;
+			//HANDLE_ERROR(cudaEventCreate(&start));
+			//HANDLE_ERROR(cudaEventCreate(&stop));
 
-			//readjust activePathStreamSize
-			activePathStreamSize += assignableStreamSlot;
-			g_uPathQueueCur += assignableStreamSlot;
+			uint useQueueSize = width * height;
 
-			//tracing process
-			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize);
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			// eye paths
+			pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "gen path: " << time << std::endl;
 
-			//compact pathstream and find activePathStreamSize value
-			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
-			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			// trace path queue
+			TracePathQueue(useQueueSize);
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "trace path: " << time << std::endl;
 
-			//gen connectionpathstream
-			PTPathVertex** conPathStreamEndItr = thrust::copy_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, g_devEyeLightConPathStream, is_connectToLightPath());
-			uint activeConPathStreamSize = conPathStreamEndItr - g_devEyeLightConPathStream;
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "accum path: " << time << std::endl;
+		}
+		else
+		{
+			//float time;
+			//cudaEvent_t start, stop;
+			//HANDLE_ERROR(cudaEventCreate(&start));
+			//HANDLE_ERROR(cudaEventCreate(&stop));
 
-			//connect eye and light path stream
-			if (activeConPathStreamSize > 0)
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			// gen adaptive eye paths
+			std::vector<uint> pathQueuesSize;
+			uint accumPathQueueSize = 0;
+			uint genSize = width * height;
+			while (accumPathQueueSize < genSize)
 			{
-				pt_connectEyeLightPath_kernel << < dim3(ceil((float)activeConPathStreamSize / (float)block1.x), 1, 1), block1 >> >
-					(g_devEyeLightConPathStream, activeConPathStreamSize, g_devLightVertices, g_uLightVerticesSize);
+				// generate path into temp path
+				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
+					, WangHash(g_uCurFrameN), g_devResultVarData, g_devTempPathQueue + accumPathQueueSize);
+				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
+					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
+				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
+				pathQueuesSize.push_back(compactedGenSize);
+				accumPathQueueSize += compactedGenSize;
+				if (compactedGenSize == 0) break;
+				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 			}
+			// generate real path from temp path
+			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
+
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "gen path: " << time << std::endl;
+
+
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			TracePathQueue(genSize);
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "trace path: " << time << std::endl;
+
+			//HANDLE_ERROR(cudaEventRecord(start, 0));
+			accumPathQueueSize = 0;
+			for (auto pathQueueSize : pathQueuesSize)
+			{
+				pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
+					(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+				accumPathQueueSize += pathQueueSize;
+			}
+			//HANDLE_ERROR(cudaEventRecord(stop, 0));
+			//HANDLE_ERROR(cudaEventSynchronize(stop));
+			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
+			//std::cout << "accum path: " << time << std::endl;
 
 		}
-		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
 
 		// Copy result to host
 		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
