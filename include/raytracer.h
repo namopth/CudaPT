@@ -144,6 +144,7 @@ public:
 
 	void SetTWMaterialBar(const int matId = -1);
 
+	std::vector<std::string> m_vLoadedModelPaths;
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;
 	std::vector<RTMaterial> m_pMaterials;

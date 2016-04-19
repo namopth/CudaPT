@@ -20,6 +20,7 @@ public:
 	virtual void OnHandleInputMSG(const INPUTMSG &msg);
 
 	void BrowseModel();
+	void BrowseAndSaveResult();
 
 	inline RTRenderer* GetRenderer() { return &m_raytracer; }
 
@@ -50,6 +51,12 @@ protected:
 	float m_fScrollY;
 	NPMathHelper::Vec2 m_v2LastCursorPos;
 	NPMathHelper::Vec2 m_v2CurrentCursorPos;
+
+	// RMSE Comparison
+	bool m_bIsRMSECapturing;
+	float m_fRMSECaptureSecTime;
+	float m_fRMSECaptureElapSecTime;
+	float* m_pCapturedConvergedResult;
 
 	void RenderScreenQuad();
 	GLuint m_uiVBOQuad;

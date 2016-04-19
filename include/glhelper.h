@@ -57,6 +57,7 @@ namespace NPGLHelper
 	bool loadCubemapFromFiles(std::string faces[6], GLuint &id, bool sRGB = true);
 
 	bool saveScreenShotBMP(const char* filename, const float width, const float height);
+	bool saveRGBImageBMP(const unsigned char* data, const char* filename, const float width, const float height);
 
 	class RenderObject
 	{

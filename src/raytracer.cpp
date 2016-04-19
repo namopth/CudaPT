@@ -243,6 +243,7 @@ bool RTScene::AddModel(const char* filename)
 	{
 		return false;
 	}
+	m_vLoadedModelPaths.push_back(filename);
 	std::string dir = sPath.substr(0, sPath.find_last_of('\\'));
 	AssimpProcessNode(this, scene->mRootNode, scene);
 	AssimpProcessSceneMaterial(this, scene, dir);

@@ -733,7 +733,16 @@ void updateLightTriCudaMem(RTScene* scene)
 		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
-	__global__ void pt_genTempAdapPathQueue_kernel(float width, float height, uint32 hashedFrameN
+	__global__ void pt_fillTempAdapPathQueue_kernel(uint* pathQueue, uint fillSize)
+	{
+		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (ind >= fillSize) return;
+
+		pathQueue[ind] = ind;
+	}
+
+	__global__ void pt_genTempAdapPathQueue_kernel(float width, float height, uint32 hashedFrameN, uint32 seedoffset
 		, float* genChance, uint* pathQueue)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -744,7 +753,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		uint ind = (y * width + x);
 
 		curandState randstate;
-		curand_init(hashedFrameN + ind, 0, 0, &randstate);
+		curand_init(hashedFrameN + ind + seedoffset, 0, 0, &randstate);
 
 		pathQueue[ind] = x + y * width;
 
@@ -1120,7 +1129,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			{
 				// generate path into temp path
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
-					, WangHash(g_uCurFrameN), g_devResultVarData, g_devTempPathQueue + accumPathQueueSize);
+					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
@@ -1129,6 +1138,16 @@ void updateLightTriCudaMem(RTScene* scene)
 				if (compactedGenSize == 0) break;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 			}
+
+			// fill temp path
+			int unfilledPathQueueSize = genSize - accumPathQueueSize;
+			if (unfilledPathQueueSize > 0)
+			{
+				pt_fillTempAdapPathQueue_kernel << < dim3(ceil((float)unfilledPathQueueSize / (float)block1.x), 1, 1), block1 >> > (g_devTempPathQueue + accumPathQueueSize, unfilledPathQueueSize);
+				pathQueuesSize.push_back(unfilledPathQueueSize);
+				accumPathQueueSize += unfilledPathQueueSize;
+			}
+
 			// generate real path from temp path
 			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);

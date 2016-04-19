@@ -3,6 +3,9 @@
 #include <iostream>
 #include <string>
 
+#include <tbb/parallel_for.h>
+#include <tbb/blocked_range.h>
+
 #include "atbhelper.h"
 #include "oshelper.h"
 
@@ -20,6 +23,13 @@ void TW_CALL TWBrowseModel(void * window)
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
 	if (appWin)
 		appWin->BrowseModel();
+}
+
+void TW_CALL TWSaveResult(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseAndSaveResult();
 }
 
 void TW_CALL SetRenderingMethodCallback(const void *value, void *clientData)
@@ -108,6 +118,8 @@ int CUDAPTWindow::OnInit()
 		" label='Time(ms)' group='Render Info'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "Frame FPS", TW_TYPE_FLOAT, &m_fFPS,
 		" label='FPS' group='Render Info'"));
+
+	ATB_ASSERT(TwAddButton(mainBar, "saveresult", TWSaveResult, this, "label='Save Result' group='Output'"));
 
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())
@@ -265,7 +277,7 @@ void CUDAPTWindow::OnHandleInputMSG(const INPUTMSG &msg)
 
 void CUDAPTWindow::BrowseModel()
 {
-	std::string file = NPOSHelper::BrowseFile("All\0*.*\0Text\0*.TXT\0");
+	std::string file = NPOSHelper::BrowseOpenFile("All\0*.*\0Text\0*.TXT\0");
 	if (file.empty())
 		return;
 	if (!m_scene.AddModel(file.c_str())){
@@ -273,6 +285,33 @@ void CUDAPTWindow::BrowseModel()
 		message = message + file;
 		NPOSHelper::CreateMessageBox(message.c_str(), "Load Model Data Failure", NPOSHelper::MSGBOX_OK);
 		return;
+	}
+}
+
+void CUDAPTWindow::BrowseAndSaveResult()
+{
+	std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0","BMP");
+	if (file.empty())
+		return;
+	if (m_raytracer.GetResult())
+	{
+		unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+		{
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+				{
+					uint32 y = i / m_iSizeW;
+					uint32 x = i - y * m_iSizeW;
+					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x)*3;
+					data[i*3] = m_raytracer.GetResult()[ind] * 256;
+					data[i*3 + 1] = m_raytracer.GetResult()[ind + 1] * 256;
+					data[i*3 + 2] = m_raytracer.GetResult()[ind + 2] * 256;
+				}
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
+		}
+		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+		DELETE(data);
 	}
 }
 

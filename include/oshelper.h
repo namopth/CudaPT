@@ -8,10 +8,17 @@
 #endif
 
 #include <string>
+#include <iostream>
+#include <fstream>
+
 
 namespace NPOSHelper
 {
-	std::string BrowseFile(const char* filter);
+	typedef std::ofstream ofstr;
+	typedef std::ifstream ifstr;
+
+	std::string BrowseOpenFile(const char* filter = "");
+	std::string BrowseSaveFile(const char* filter = "", const char* ext = "");
 
 	enum MSGBOX_TYPE
 	{
@@ -23,7 +30,7 @@ namespace NPOSHelper
 		MSGBOX_RETRYCANCEL		= 0x00000005L
 	};
 
-	//NPOSHelper::CreateMessageBox(NPOSHelper::BrowseFile("All\0*.*\0Text\0*.TXT\0").c_str(), "", NPOSHelper::MSGBOX_OK);
+	//NPOSHelper::CreateMessageBox(NPOSHelper::BrowseOpenFile("All\0*.*\0Text\0*.TXT\0").c_str(), "", NPOSHelper::MSGBOX_OK);
 	int CreateMessageBox(const char* text, const char* title, const unsigned int type);
 
 	std::string GetOSCurrentDirectory();

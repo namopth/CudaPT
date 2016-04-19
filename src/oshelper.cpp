@@ -7,7 +7,7 @@
 namespace NPOSHelper
 {
 #ifdef WINOS
-	std::string BrowseFile(const char* filter)
+	std::string BrowseOpenFile(const char* filter)
 	{
 		OPENFILENAME ofn;
 		char szFile[512];
@@ -27,6 +27,32 @@ namespace NPOSHelper
 
 		std::string curDir = NPOSHelper::GetOSCurrentDirectory();
 		GetOpenFileName(&ofn);
+		NPOSHelper::SetOSCurrentDirectory(curDir);
+
+		return szFile;
+	}
+
+	std::string BrowseSaveFile(const char* filter, const char* ext)
+	{
+		OPENFILENAME ofn;
+		char szFile[512];
+
+		ZeroMemory(&ofn, sizeof(ofn));
+		ofn.lStructSize = sizeof(ofn);
+		ofn.hwndOwner = NULL;
+		ofn.lpstrFile = szFile;
+		ofn.lpstrFile[0] = '\0';
+		ofn.nMaxFile = sizeof(szFile);
+		ofn.lpstrDefExt = ext;
+		ofn.lpstrFilter = filter;
+		ofn.nFilterIndex = 1;
+		ofn.lpstrFileTitle = NULL;
+		ofn.nMaxFileTitle = 0;
+		ofn.lpstrInitialDir = NULL;
+		ofn.Flags = OFN_PATHMUSTEXIST;
+
+		std::string curDir = NPOSHelper::GetOSCurrentDirectory();
+		GetSaveFileName(&ofn);
 		NPOSHelper::SetOSCurrentDirectory(curDir);
 
 		return szFile;
