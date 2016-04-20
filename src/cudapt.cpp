@@ -121,6 +121,22 @@ int CUDAPTWindow::OnInit()
 
 	ATB_ASSERT(TwAddButton(mainBar, "saveresult", TWSaveResult, this, "label='Save Result' group='Output'"));
 
+	ATB_ASSERT(TwAddButton(mainBar, "saveenvsetting", TWSaveResult, this, "label='Save Setting' group='Preset Setting'"));
+	ATB_ASSERT(TwAddButton(mainBar, "loadenvsetting", TWSaveResult, this, "label='Load Setting' group='Preset Setting'"));
+
+	ATB_ASSERT(TwAddButton(mainBar, "chooseasconvergedresult", TWSaveResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "saveconvergedresult", TWSaveResult, this, "label='Save Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "loadconvergedresult", TWSaveResult, this, "label='Load Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Converged Result Valid' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'"));
+
+	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWSaveResult, this, "label='Begin Collecting RMSE' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "cancelcollectrmse", TWSaveResult, this, "label='Cancel Collecting RMSE' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "iscollectingrmse", TW_TYPE_BOOLCPP, &m_bIsRMSECapturing, " label='Is Collecting' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "collectingrmseelapsetime", TW_TYPE_FLOAT, &m_fRMSECaptureElapSecTime, "label='Elapse time' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "rmseresult", TW_TYPE_FLOAT, &m_fRMSEResult, "label='RMSE Result' group='RMSE Experiment'"));
+
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())
 	{

@@ -57,6 +57,7 @@ protected:
 	float m_fRMSECaptureSecTime;
 	float m_fRMSECaptureElapSecTime;
 	float* m_pCapturedConvergedResult;
+	bool m_bIsCapturedConvergedResultValid;
 	float m_fRMSEResult;
 
 	void RenderScreenQuad();
