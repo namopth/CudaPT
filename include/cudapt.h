@@ -57,6 +57,7 @@ protected:
 	float m_fRMSECaptureSecTime;
 	float m_fRMSECaptureElapSecTime;
 	float* m_pCapturedConvergedResult;
+	float m_fRMSEResult;
 
 	void RenderScreenQuad();
 	GLuint m_uiVBOQuad;

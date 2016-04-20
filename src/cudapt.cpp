@@ -313,6 +313,11 @@ void CUDAPTWindow::BrowseAndSaveResult()
 		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
 		DELETE(data);
 	}
+	else
+	{
+		std::string message = "No Result Data";
+		NPOSHelper::CreateMessageBox(message.c_str(), "Save Result Failure", NPOSHelper::MSGBOX_OK);
+	}
 }
 
 void CUDAPTWindow::RenderScreenQuad()
