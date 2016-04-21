@@ -32,6 +32,48 @@ void TW_CALL TWSaveResult(void * window)
 		appWin->BrowseAndSaveResult();
 }
 
+void TW_CALL TWBrowseEnvSetting(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseEnvSetting();
+}
+
+void TW_CALL TWBrowseAndSaveEnvSetting(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseAndSaveEnvSetting();
+}
+
+void TW_CALL TWChooseAsConvergedResult(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->ChooseAsConvergedResult();
+}
+
+void TW_CALL TWBrowseConvergedResult(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseConvergedResult();
+}
+
+void TW_CALL TWBrowseAndSaveConvergedResult(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseAndSaveConvergedResult();
+}
+
+void TW_CALL TWToggleCollectRMSE(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->ToggleCollectRMSE();
+}
+
 void TW_CALL SetRenderingMethodCallback(const void *value, void *clientData)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)clientData;
@@ -121,18 +163,18 @@ int CUDAPTWindow::OnInit()
 
 	ATB_ASSERT(TwAddButton(mainBar, "saveresult", TWSaveResult, this, "label='Save Result' group='Output'"));
 
-	ATB_ASSERT(TwAddButton(mainBar, "saveenvsetting", TWSaveResult, this, "label='Save Setting' group='Preset Setting'"));
-	ATB_ASSERT(TwAddButton(mainBar, "loadenvsetting", TWSaveResult, this, "label='Load Setting' group='Preset Setting'"));
+	ATB_ASSERT(TwAddButton(mainBar, "saveenvsetting", TWBrowseAndSaveEnvSetting, this, "label='Save Setting' group='Preset Setting'"));
+	ATB_ASSERT(TwAddButton(mainBar, "loadenvsetting", TWBrowseEnvSetting, this, "label='Load Setting' group='Preset Setting'"));
 
-	ATB_ASSERT(TwAddButton(mainBar, "chooseasconvergedresult", TWSaveResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "saveconvergedresult", TWSaveResult, this, "label='Save Converged Result' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "loadconvergedresult", TWSaveResult, this, "label='Load Converged Result' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Converged Result Valid' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "chooseasconvergedresult", TWChooseAsConvergedResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "saveconvergedresult", TWBrowseAndSaveConvergedResult, this, "label='Save Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "loadconvergedresult", TWBrowseConvergedResult, this, "label='Load Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRW(mainBar, "showconvergedresult", TW_TYPE_BOOLCPP, &m_bIsShowCapturedConvergedResult, "label='Show Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Valid' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'"));
 
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWSaveResult, this, "label='Begin Collecting RMSE' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "cancelcollectrmse", TWSaveResult, this, "label='Cancel Collecting RMSE' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWToggleCollectRMSE, this, "label='Begin/Cancel Collect RMSE' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "iscollectingrmse", TW_TYPE_BOOLCPP, &m_bIsRMSECapturing, " label='Is Collecting' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "collectingrmseelapsetime", TW_TYPE_FLOAT, &m_fRMSECaptureElapSecTime, "label='Elapse time' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "rmseresult", TW_TYPE_FLOAT, &m_fRMSEResult, "label='RMSE Result' group='RMSE Experiment'"));
@@ -331,10 +373,99 @@ void CUDAPTWindow::BrowseAndSaveResult()
 	}
 	else
 	{
-		std::string message = "No Result Data";
-		NPOSHelper::CreateMessageBox(message.c_str(), "Save Result Failure", NPOSHelper::MSGBOX_OK);
+		NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
 	}
 }
+
+void CUDAPTWindow::BrowseEnvSetting()
+{
+	std::string file = NPOSHelper::BrowseOpenFile(".NPRTENV\0");
+	if (file.empty())
+		return;
+
+	NPOSHelper::ifstr fileStream(file);
+	if (!fileStream.is_open())
+	{
+		NPOSHelper::CreateMessageBox("Cannot Open File", "Load Env Failure", NPOSHelper::MSGBOX_OK);
+		return;
+	}
+	std::string keyword;
+	fileStream >> keyword;
+	while (!fileStream.eof())
+	{
+		if (!keyword.find("//"))
+		{
+			std::string line;
+			std::getline(fileStream, line);
+		}
+		else if (!keyword.compare("campos"))
+		{
+			NPMathHelper::Vec3 value;
+			fileStream >> value._x >> value._y >> value._z;
+			m_cam.SetPos(value);
+		}
+		else if (!keyword.compare("campitchyaw"))
+		{
+			NPMathHelper::Vec3 value;
+			fileStream >> value._x >> value._y;
+			m_cam.SetPitch(value._x);
+			m_cam.SetYaw(value._y);
+		}
+		else if (!keyword.compare("modelfiles"))
+		{
+
+		}
+
+		fileStream >> keyword;
+	}
+
+	fileStream.close();
+}
+
+void CUDAPTWindow::BrowseAndSaveEnvSetting()
+{
+	std::string file = NPOSHelper::BrowseSaveFile("*.NPRTENV\0", "NPRTENV");
+	if (file.empty())
+		return;
+
+	NPOSHelper::ofstr fileStream;
+	fileStream.open(file, std::ios::out, std::ios::trunc);
+	if (fileStream.fail())
+	{
+		NPOSHelper::CreateMessageBox("Cannot Create File", "Save Env Failure", NPOSHelper::MSGBOX_OK);
+		return;
+	}
+	fileStream << "// Namo Podee's Ray Tracer Environment Setting File (Strict Format)" << std::endl;
+	fileStream << "campos\t" << m_cam.GetPos()._x << "\t" << m_cam.GetPos()._y << "\t" << m_cam.GetPos()._z << std::endl;
+	fileStream << "campitchyaw\t" << m_cam.GetPitch() << "\t" << m_cam.GetYaw() << std::endl;
+
+	fileStream.close();
+}
+
+void CUDAPTWindow::ChooseAsConvergedResult()
+{
+
+}
+
+void CUDAPTWindow::BrowseConvergedResult()
+{
+	std::string file = NPOSHelper::BrowseOpenFile(".NPRTFIMG\0");
+	if (file.empty())
+		return;
+}
+
+void CUDAPTWindow::BrowseAndSaveConvergedResult()
+{
+	std::string file = NPOSHelper::BrowseSaveFile("*.NPRTFIMG\0", "NPRTFIMG");
+	if (file.empty())
+		return;
+}
+
+void CUDAPTWindow::ToggleCollectRMSE()
+{
+
+}
+
 
 void CUDAPTWindow::RenderScreenQuad()
 {

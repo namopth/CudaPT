@@ -22,6 +22,15 @@ public:
 	void BrowseModel();
 	void BrowseAndSaveResult();
 
+	void BrowseEnvSetting();
+	void BrowseAndSaveEnvSetting();
+
+	void ChooseAsConvergedResult();
+	void BrowseConvergedResult();
+	void BrowseAndSaveConvergedResult();
+
+	void ToggleCollectRMSE();
+
 	inline RTRenderer* GetRenderer() { return &m_raytracer; }
 
 protected:
@@ -57,6 +66,7 @@ protected:
 	float m_fRMSECaptureSecTime;
 	float m_fRMSECaptureElapSecTime;
 	float* m_pCapturedConvergedResult;
+	bool m_bIsShowCapturedConvergedResult;
 	bool m_bIsCapturedConvergedResultValid;
 	float m_fRMSEResult;
 
