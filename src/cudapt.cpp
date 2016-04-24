@@ -8,6 +8,7 @@
 
 #include "atbhelper.h"
 #include "oshelper.h"
+#include "conffilehelper.h"
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -383,43 +384,75 @@ void CUDAPTWindow::BrowseEnvSetting()
 	if (file.empty())
 		return;
 
-	NPOSHelper::ifstr fileStream(file);
-	if (!fileStream.is_open())
+	NPConfFileHelper::txtConfFile conf(file);
+	if (!conf.isValid())
 	{
 		NPOSHelper::CreateMessageBox("Cannot Open File", "Load Env Failure", NPOSHelper::MSGBOX_OK);
 		return;
 	}
-	std::string keyword;
-	fileStream >> keyword;
-	while (!fileStream.eof())
+	std::string varName;
+	while (conf.ReadNextVar(varName))
 	{
-		if (!keyword.find("//"))
-		{
-			std::string line;
-			std::getline(fileStream, line);
-		}
-		else if (!keyword.compare("campos"))
+		if (!varName.compare("campos"))
 		{
 			NPMathHelper::Vec3 value;
-			fileStream >> value._x >> value._y >> value._z;
+			conf.Read(value._x);
+			conf.Read(value._y);
+			conf.Read(value._z);
 			m_cam.SetPos(value);
 		}
-		else if (!keyword.compare("campitchyaw"))
+		else if (!varName.compare("campitchyaw"))
 		{
-			NPMathHelper::Vec3 value;
-			fileStream >> value._x >> value._y;
-			m_cam.SetPitch(value._x);
-			m_cam.SetYaw(value._y);
+			float value;
+			conf.Read(value);
+			m_cam.SetPitch(value);
+			conf.Read(value);
+			m_cam.SetYaw(value);
 		}
-		else if (!keyword.compare("modelfiles"))
+		else if (!varName.compare("rttech"))
 		{
-
+			uint32 value;
+			conf.Read(value);
+			m_raytracer.SetRendererMode((RTRenderer::RENDERER_MODE)value);
 		}
-
-		fileStream >> keyword;
+		else if (!varName.compare("models"))
+		{
+			uint32 size;
+			conf.Read(size);
+			for (uint32 i = 0; i < size; i++)
+			{
+				std::string modelPath;
+				conf.Read(modelPath);
+				m_scene.AddModel(modelPath.c_str());
+			}
+		}
+		else if (!varName.compare("materials"))
+		{
+			uint32 size;
+			conf.Read(size);
+			if (m_scene.m_pMaterials.size() >= size)
+			{
+				for (uint32 i = 0; i < size; i++)
+				{
+					conf.Read(m_scene.m_pMaterials[i].anisotropic);
+					conf.Read(m_scene.m_pMaterials[i].clearcoat);
+					conf.Read(m_scene.m_pMaterials[i].clearcoatGloss);
+					conf.Read(m_scene.m_pMaterials[i].diffuse);
+					conf.Read(m_scene.m_pMaterials[i].diffuseTexId);
+					conf.Read(m_scene.m_pMaterials[i].emissive);
+					conf.Read(m_scene.m_pMaterials[i].emissiveTexId);
+					conf.Read(m_scene.m_pMaterials[i].metallic);
+					conf.Read(m_scene.m_pMaterials[i].normalTexId);
+					conf.Read(m_scene.m_pMaterials[i].roughness);
+					conf.Read(m_scene.m_pMaterials[i].sheen);
+					conf.Read(m_scene.m_pMaterials[i].sheenTint);
+					conf.Read(m_scene.m_pMaterials[i].specular);
+					conf.Read(m_scene.m_pMaterials[i].subsurface);
+					conf.Read(m_scene.m_pMaterials[i].transparency);
+				}
+			}
+		}
 	}
-
-	fileStream.close();
 }
 
 void CUDAPTWindow::BrowseAndSaveEnvSetting()
@@ -428,18 +461,73 @@ void CUDAPTWindow::BrowseAndSaveEnvSetting()
 	if (file.empty())
 		return;
 
-	NPOSHelper::ofstr fileStream;
-	fileStream.open(file, std::ios::out, std::ios::trunc);
-	if (fileStream.fail())
+	NPConfFileHelper::txtConfFile conf(file);
+	conf.WriteVar("//");
+	conf.Write("Ray Tracer Environment Setting File (Strict Format)");
+	conf.WriteVar("//");
+	conf.Write(APP_NAME);
+	conf.WriteVar("//");
+	conf.Write(APP_AUTH);
+	conf.WriteVar("//");
+	conf.Write(APP_DESC);
+	conf.WriteVar("//");
+	conf.Write(APP_VERS);
+	conf.WriteVar("//");
+	conf.Write(APP_DATE);
+
+	conf.WriteVar("campos");
+	conf.Write(m_cam.GetPos()._x);
+	conf.Write(m_cam.GetPos()._y);
+	conf.Write(m_cam.GetPos()._z);
+
+	conf.WriteVar("campitchyaw");
+	conf.Write(m_cam.GetPitch());
+	conf.Write(m_cam.GetYaw());
+
+	conf.WriteVar("rttech");
+	conf.Write((uint32)m_raytracer.GetRendererMode());
+
+	if (m_scene.m_vLoadedModelPaths.size() > 0)
+	{
+		conf.WriteVar("models");
+		conf.Write(m_scene.m_vLoadedModelPaths.size());
+		std::string curDir = NPOSHelper::GetOSCurrentDirectory();
+		for (auto it : m_scene.m_vLoadedModelPaths)
+		{
+			std::string relPath = NPOSHelper::GetRelPathFromFull(curDir,it);
+			conf.Write(relPath);
+		}
+	}
+
+	if (m_scene.m_pMaterials.size() > 0)
+	{
+		conf.WriteVar("materials");
+		conf.Write(m_scene.m_pMaterials.size());
+		std::string curDir = NPOSHelper::GetOSCurrentDirectory();
+		for (auto it : m_scene.m_pMaterials)
+		{
+			conf.Write(it.anisotropic);
+			conf.Write(it.clearcoat);
+			conf.Write(it.clearcoatGloss);
+			conf.Write(it.diffuse);
+			conf.Write(it.diffuseTexId);
+			conf.Write(it.emissive);
+			conf.Write(it.emissiveTexId);
+			conf.Write(it.metallic);
+			conf.Write(it.normalTexId);
+			conf.Write(it.roughness);
+			conf.Write(it.sheen);
+			conf.Write(it.sheenTint);
+			conf.Write(it.specular);
+			conf.Write(it.subsurface);
+			conf.Write(it.transparency);
+		}
+	}
+
+	if (!conf.SyncDataToFile())
 	{
 		NPOSHelper::CreateMessageBox("Cannot Create File", "Save Env Failure", NPOSHelper::MSGBOX_OK);
-		return;
 	}
-	fileStream << "// Namo Podee's Ray Tracer Environment Setting File (Strict Format)" << std::endl;
-	fileStream << "campos\t" << m_cam.GetPos()._x << "\t" << m_cam.GetPos()._y << "\t" << m_cam.GetPos()._z << std::endl;
-	fileStream << "campitchyaw\t" << m_cam.GetPitch() << "\t" << m_cam.GetYaw() << std::endl;
-
-	fileStream.close();
 }
 
 void CUDAPTWindow::ChooseAsConvergedResult()

@@ -1,6 +1,12 @@
 #ifndef CUDAPT_H
 #define CUDAPT_H
 
+#define APP_NAME "Cuda Ray Tracing Lab"
+#define APP_AUTH "Namo Podee"
+#define APP_DESC "Ray Tracing Program for Experiment"
+#define APP_VERS "1.0.0"
+#define APP_DATE __DATE__
+
 #include "glhelper.h"
 #include "camhelper.h"
 #include "mathhelper.h"

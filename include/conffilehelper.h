@@ -4,6 +4,8 @@
 #include <string>
 #include <sstream>
 
+#include "mathhelper.h"
+
 namespace NPConfFileHelper
 {
 	class txtConfFile
@@ -15,8 +17,27 @@ namespace NPConfFileHelper
 		bool ReadNextVar(std::string& name);
 		void WriteVar(const std::string& name);
 
-		template<typename T> T Read();
-		template<typename T> void Write(const T& data);
+		template<typename T> void Read(T& value)
+		{
+			m_sUnreadDataStream >> value;
+			m_sReadDataStream << value;
+		}
+
+		void Read(NPMathHelper::Vec3& value)
+		{
+			m_sUnreadDataStream >> value._x >> value._y >> value._z;
+			m_sReadDataStream << value._x << value._y << value._z;
+		}
+
+		template<typename T> void Write(const T& data)
+		{
+			m_sUnwrittenDataStream << data << "\t";
+		}
+
+		void Write(const NPMathHelper::Vec3& data)
+		{
+			m_sUnwrittenDataStream << data._x << "\t" << data._y << "\t" << data._z << "\t";
+		}
 
 		void ClearData();
 		inline const bool isValid() const { return m_bIsValid; }

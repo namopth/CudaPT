@@ -63,6 +63,49 @@ namespace NPOSHelper
 		return MessageBox(NULL, text, title, type);
 	}
 
+	std::string GetRelPathFromFull(const std::string& mainPath, const std::string& convPath)
+	{
+		//std::cout << "GetRelPathFromFull\t" << mainPath << "\t" << convPath << "\n";
+		std::string relPath;
+
+		// remove similar path
+		size_t folEnd = 0;
+		size_t matchedEnd = 0;
+		while (folEnd < mainPath.size())
+		{
+			folEnd = mainPath.find("\\", matchedEnd);
+			folEnd = (folEnd == std::string::npos) ? mainPath.size() : folEnd - 1;
+			if (!mainPath.substr(matchedEnd, folEnd - matchedEnd + 1).compare(convPath.substr(matchedEnd, folEnd - matchedEnd + 1)))
+			{
+				matchedEnd = folEnd + 2;
+			}
+			else
+			{
+				break;
+			}
+			//std::cout << "Matched Part Processing:\t" << mainPath.substr(0, matchedEnd-1) << "\n";
+		}
+		//std::cout << "Matched Part\t" << mainPath.substr(0,matchedEnd-1) << "\n";
+
+		if (!matchedEnd)
+		{
+			return convPath;
+		}
+
+		size_t folBeg = matchedEnd;
+		while (folBeg < mainPath.size())
+		{
+			folBeg = mainPath.find("\\", folBeg);
+			folBeg = (folBeg == std::string::npos) ? mainPath.size() : folBeg + 1;
+			relPath += "..\\";
+		}
+		relPath += convPath.substr(matchedEnd);
+		//std::cout << "RelPath\t" << relPath << "\n";
+
+		return relPath;
+	}
+
+
 	std::string GetOSCurrentDirectory()
 	{
 		char dir[1024];

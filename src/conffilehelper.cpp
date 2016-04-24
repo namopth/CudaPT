@@ -90,19 +90,6 @@ namespace NPConfFileHelper
 		m_sUnwrittenDataStream << name << "\t";
 	}
 
-	template<typename T> T txtConfFile::Read()
-	{
-		T value;
-		m_sUnreadDataStream >> value;
-		m_sReadDataStream << value;
-		return value;
-	}
-
-	template<typename T> void txtConfFile::Write(const T& data)
-	{
-		m_sUnwrittenDataStream << data << "\t";
-	}
-
 	void txtConfFile::ClearData()
 	{
 		m_sUnwrittenDataStream.clear();
