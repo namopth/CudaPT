@@ -32,10 +32,11 @@ public:
 	void BrowseAndSaveEnvSetting();
 
 	void ChooseAsConvergedResult();
-	void BrowseConvergedResult();
-	void BrowseAndSaveConvergedResult();
+	void ClearConvergedResult();
+	void ExportConvergedResult();
 
 	void ToggleCollectRMSE();
+	void CalculateRMSE();
 
 	inline RTRenderer* GetRenderer() { return &m_raytracer; }
 

@@ -54,18 +54,18 @@ void TW_CALL TWChooseAsConvergedResult(void * window)
 		appWin->ChooseAsConvergedResult();
 }
 
-void TW_CALL TWBrowseConvergedResult(void * window)
+void TW_CALL TWClearConvergedResult(void * window)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
 	if (appWin)
-		appWin->BrowseConvergedResult();
+		appWin->ClearConvergedResult();
 }
 
-void TW_CALL TWBrowseAndSaveConvergedResult(void * window)
+void TW_CALL TWExportConvergedResult(void * window)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
 	if (appWin)
-		appWin->BrowseAndSaveConvergedResult();
+		appWin->ExportConvergedResult();
 }
 
 void TW_CALL TWToggleCollectRMSE(void * window)
@@ -73,6 +73,13 @@ void TW_CALL TWToggleCollectRMSE(void * window)
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
 	if (appWin)
 		appWin->ToggleCollectRMSE();
+}
+
+void TW_CALL TWToggleCalculateRMSE(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->CalculateRMSE();
 }
 
 void TW_CALL SetRenderingMethodCallback(const void *value, void *clientData)
@@ -110,13 +117,14 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_uDeltaTimeSec(0)
 	, m_fFPS(0.f)
 	, m_bIsMLBClicked(false)
+	, m_pCapturedConvergedResult(nullptr)
 {
 
 }
 
 CUDAPTWindow::~CUDAPTWindow()
 {
-
+	DELETE_ARRAY(m_pCapturedConvergedResult);
 }
 
 int CUDAPTWindow::OnInit()
@@ -168,14 +176,15 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddButton(mainBar, "loadenvsetting", TWBrowseEnvSetting, this, "label='Load Setting' group='Preset Setting'"));
 
 	ATB_ASSERT(TwAddButton(mainBar, "chooseasconvergedresult", TWChooseAsConvergedResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "saveconvergedresult", TWBrowseAndSaveConvergedResult, this, "label='Save Converged Result' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddButton(mainBar, "loadconvergedresult", TWBrowseConvergedResult, this, "label='Load Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "exportconvergedresult", TWExportConvergedResult, this, "label='Export Converged Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "clearconvergedresult", TWClearConvergedResult, this, "label='Clear Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "showconvergedresult", TW_TYPE_BOOLCPP, &m_bIsShowCapturedConvergedResult, "label='Show Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Valid' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'"));
 
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWToggleCollectRMSE, this, "label='Begin/Cancel Collect RMSE' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "calcrmse", TWToggleCalculateRMSE, this, "label='Calculate RMSE Now' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "iscollectingrmse", TW_TYPE_BOOLCPP, &m_bIsRMSECapturing, " label='Is Collecting' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "collectingrmseelapsetime", TW_TYPE_FLOAT, &m_fRMSECaptureElapSecTime, "label='Elapse time' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "rmseresult", TW_TYPE_FLOAT, &m_fRMSEResult, "label='RMSE Result' group='RMSE Experiment'"));
@@ -207,6 +216,25 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");
 	m_uDeltaTimeSec = (uint32)(deltaTime * 1000.f);
 	m_fFPS = (deltaTime > M_EPSILON) ? 1.f / deltaTime : 0.f;
+
+	// Check Collect RMSE
+	if (m_bIsRMSECapturing)
+	{
+		if (!m_fRMSECaptureElapSecTime)
+		{
+			m_scene.SetIsCudaDirty(true);
+			m_bIsTracing = true;
+		}
+
+		m_fRMSECaptureElapSecTime += deltaTime;
+		if (m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
+		{
+			std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " seconds.\n";
+			CalculateRMSE();
+			m_bIsRMSECapturing = false;
+			m_bIsTracing = false;
+		}
+	}
 
 	// Camera control - bgn
 	NPMathHelper::Vec2 cursorMoved = m_v2CurrentCursorPos - m_v2LastCursorPos;
@@ -260,6 +288,10 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 		m_raytracer.Render(m_cam.GetPos(), m_cam.GetDir()
 			, m_cam.GetUp(), M_PI_2 * 0.5f, m_scene);
 		traceResult = m_raytracer.GetResult();
+	}
+	if (m_bIsShowCapturedConvergedResult && m_pCapturedConvergedResult)
+	{
+		traceResult = m_pCapturedConvergedResult;
 	}
 
 	m_pFinalComposeEffect->activeEffect();
@@ -532,26 +564,96 @@ void CUDAPTWindow::BrowseAndSaveEnvSetting()
 
 void CUDAPTWindow::ChooseAsConvergedResult()
 {
-
+	if (m_raytracer.GetResult())
+	{
+		if (!m_pCapturedConvergedResult)
+		{
+			m_pCapturedConvergedResult = new float[m_iSizeW * m_iSizeH * 3];
+		}
+		std::memcpy(m_pCapturedConvergedResult, m_raytracer.GetResult(), m_iSizeW * m_iSizeH * sizeof(float) * 3);
+		m_bIsCapturedConvergedResultValid = true;
+	}
+	else
+	{
+		NPOSHelper::CreateMessageBox("No Rendering Result To Be Choosen", "Select Result Failed", NPOSHelper::MSGBOX_OK);
+	}
 }
 
-void CUDAPTWindow::BrowseConvergedResult()
+void CUDAPTWindow::ClearConvergedResult()
 {
-	std::string file = NPOSHelper::BrowseOpenFile(".NPRTFIMG\0");
-	if (file.empty())
-		return;
+	DELETE_ARRAY(m_pCapturedConvergedResult);
+	m_bIsCapturedConvergedResultValid = false;
 }
 
-void CUDAPTWindow::BrowseAndSaveConvergedResult()
+void CUDAPTWindow::ExportConvergedResult()
 {
-	std::string file = NPOSHelper::BrowseSaveFile("*.NPRTFIMG\0", "NPRTFIMG");
+	std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0", "BMP");
 	if (file.empty())
 		return;
+	if (m_pCapturedConvergedResult && m_bIsCapturedConvergedResultValid)
+	{
+		unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+		{
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+				{
+					uint32 y = i / m_iSizeW;
+					uint32 x = i - y * m_iSizeW;
+					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
+					data[i * 3] = m_pCapturedConvergedResult[ind] * 256;
+					data[i * 3 + 1] = m_pCapturedConvergedResult[ind + 1] * 256;
+					data[i * 3 + 2] = m_pCapturedConvergedResult[ind + 2] * 256;
+				}
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
+		}
+		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+		DELETE(data);
+	}
+	else
+	{
+		NPOSHelper::CreateMessageBox("No Converged Result Data", "Save Converged Result Failure", NPOSHelper::MSGBOX_OK);
+	}
 }
 
 void CUDAPTWindow::ToggleCollectRMSE()
 {
+	if (!m_bIsRMSECapturing)
+	{
+		if (m_pCapturedConvergedResult)
+		{
+			m_bIsRMSECapturing = true;
+			m_fRMSECaptureElapSecTime = 0.f;
+		}
+		else
+		{
+			NPOSHelper::CreateMessageBox("No Converged Result", "Collect RMSE Failed", NPOSHelper::MSGBOX_OK);
+		}
+	}
+	else
+	{
+		m_bIsRMSECapturing = false;
+	}
+}
 
+void CUDAPTWindow::CalculateRMSE()
+{
+	if (m_raytracer.GetResult() && m_pCapturedConvergedResult)
+	{
+		float result = 0.f;
+		for (uint32 i = 0; i < m_iSizeH * m_iSizeW * 3; i++)
+		{
+			float diff = m_pCapturedConvergedResult[i] - m_raytracer.GetResult()[i];
+			result += diff * diff;
+		}
+		result = sqrtf(result / (float)(m_iSizeH * m_iSizeW * 3));
+		m_fRMSEResult = result;
+		std::cout << "RMSE : " << result << "\n";
+	}
+	else
+	{
+		NPOSHelper::CreateMessageBox("No Rendering Result To Be Calculated", "Calculate RMSE Failed", NPOSHelper::MSGBOX_OK);
+	}
 }
 
 
