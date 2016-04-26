@@ -47,11 +47,11 @@ void TW_CALL TWBrowseAndSaveEnvSetting(void * window)
 		appWin->BrowseAndSaveEnvSetting();
 }
 
-void TW_CALL TWChooseAsConvergedResult(void * window)
+void TW_CALL TWChooseResultAsConvergedResult(void * window)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
 	if (appWin)
-		appWin->ChooseAsConvergedResult();
+		appWin->ChooseResultAsConvergedResult();
 }
 
 void TW_CALL TWClearConvergedResult(void * window)
@@ -175,7 +175,7 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddButton(mainBar, "saveenvsetting", TWBrowseAndSaveEnvSetting, this, "label='Save Setting' group='Preset Setting'"));
 	ATB_ASSERT(TwAddButton(mainBar, "loadenvsetting", TWBrowseEnvSetting, this, "label='Load Setting' group='Preset Setting'"));
 
-	ATB_ASSERT(TwAddButton(mainBar, "chooseasconvergedresult", TWChooseAsConvergedResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddButton(mainBar, "ChooseResultAsConvergedResult", TWChooseResultAsConvergedResult, this, "label='Choose as Converge Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "exportconvergedresult", TWExportConvergedResult, this, "label='Export Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "clearconvergedresult", TWClearConvergedResult, this, "label='Clear Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "showconvergedresult", TW_TYPE_BOOLCPP, &m_bIsShowCapturedConvergedResult, "label='Show Converged Result' group='RMSE Experiment'"));
@@ -484,6 +484,16 @@ void CUDAPTWindow::BrowseEnvSetting()
 				}
 			}
 		}
+		else if (!varName.compare("convergedresult"))
+		{
+			float* tempData = new float[m_iSizeH * m_iSizeW * 3];
+			for (uint32 i = 0; i < m_iSizeH * m_iSizeW * 3; i++)
+			{
+				conf.Read(tempData[i]);
+			}
+			SetConvergedResult(tempData);
+			DELETE_ARRAY(tempData);
+		}
 	}
 }
 
@@ -556,27 +566,42 @@ void CUDAPTWindow::BrowseAndSaveEnvSetting()
 		}
 	}
 
+	if (m_bIsCapturedConvergedResultValid && m_pCapturedConvergedResult)
+	{
+		conf.WriteVar("convergedresult");
+		for (uint32 i = 0; i < m_iSizeH * m_iSizeW * 3; i++)
+		{
+			conf.Write(m_pCapturedConvergedResult[i]);
+		}
+	}
+
 	if (!conf.SyncDataToFile())
 	{
 		NPOSHelper::CreateMessageBox("Cannot Create File", "Save Env Failure", NPOSHelper::MSGBOX_OK);
 	}
 }
 
-void CUDAPTWindow::ChooseAsConvergedResult()
+void CUDAPTWindow::ChooseResultAsConvergedResult()
 {
-	if (m_raytracer.GetResult())
+	if (!SetConvergedResult(m_raytracer.GetResult()))
+	{
+		NPOSHelper::CreateMessageBox("No Rendering Result To Be Choosen", "Select Result Failed", NPOSHelper::MSGBOX_OK);
+	}
+}
+
+bool CUDAPTWindow::SetConvergedResult(const float* data)
+{
+	if (data)
 	{
 		if (!m_pCapturedConvergedResult)
 		{
 			m_pCapturedConvergedResult = new float[m_iSizeW * m_iSizeH * 3];
 		}
-		std::memcpy(m_pCapturedConvergedResult, m_raytracer.GetResult(), m_iSizeW * m_iSizeH * sizeof(float) * 3);
+		std::memcpy(m_pCapturedConvergedResult, data, m_iSizeW * m_iSizeH * sizeof(float) * 3);
 		m_bIsCapturedConvergedResultValid = true;
+		return true;
 	}
-	else
-	{
-		NPOSHelper::CreateMessageBox("No Rendering Result To Be Choosen", "Select Result Failed", NPOSHelper::MSGBOX_OK);
-	}
+	return false;
 }
 
 void CUDAPTWindow::ClearConvergedResult()

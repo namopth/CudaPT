@@ -31,7 +31,8 @@ public:
 	void BrowseEnvSetting();
 	void BrowseAndSaveEnvSetting();
 
-	void ChooseAsConvergedResult();
+	void ChooseResultAsConvergedResult();
+	bool SetConvergedResult(const float* data);
 	void ClearConvergedResult();
 	void ExportConvergedResult();
 
