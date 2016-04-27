@@ -670,7 +670,8 @@ void CUDAPTWindow::CalculateRMSE()
 		for (uint32 i = 0; i < sampleN; i++)
 		{
 			//std::cout << "Debuging : " << m_pCapturedConvergedResult[i] << ", " << m_raytracer.GetResult()[i] << "\n";
-			float diff = std::fminf(1.f, std::fmaxf(0.f, m_pCapturedConvergedResult[i])) - std::fminf(1.f, std::fmaxf(0.f, m_raytracer.GetResult()[i]));
+			//float diff = std::fminf(1.f, std::fmaxf(0.f, m_pCapturedConvergedResult[i])) - std::fminf(1.f, std::fmaxf(0.f, m_raytracer.GetResult()[i]));
+			float diff = m_pCapturedConvergedResult[i] - m_raytracer.GetResult()[i];
 			result += diff * diff;
 		}
 		result = sqrtf(result / (float)sampleN);
