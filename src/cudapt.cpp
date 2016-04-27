@@ -402,7 +402,7 @@ void CUDAPTWindow::BrowseAndSaveResult()
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
 		}
 		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
-		DELETE(data);
+		DELETE_ARRAY(data);
 	}
 	else
 	{
@@ -633,7 +633,7 @@ void CUDAPTWindow::ExportConvergedResult()
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
 		}
 		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
-		DELETE(data);
+		DELETE_ARRAY(data);
 	}
 	else
 	{
@@ -666,14 +666,41 @@ void CUDAPTWindow::CalculateRMSE()
 	if (m_raytracer.GetResult() && m_pCapturedConvergedResult)
 	{
 		float result = 0.f;
-		for (uint32 i = 0; i < m_iSizeH * m_iSizeW * 3; i++)
+		uint32 sampleN = m_iSizeH * m_iSizeW * 3;
+		for (uint32 i = 0; i < sampleN; i++)
 		{
-			float diff = m_pCapturedConvergedResult[i] - m_raytracer.GetResult()[i];
+			//std::cout << "Debuging : " << m_pCapturedConvergedResult[i] << ", " << m_raytracer.GetResult()[i] << "\n";
+			float diff = std::fminf(1.f, std::fmaxf(0.f, m_pCapturedConvergedResult[i])) - std::fminf(1.f, std::fmaxf(0.f, m_raytracer.GetResult()[i]));
 			result += diff * diff;
 		}
-		result = sqrtf(result / (float)(m_iSizeH * m_iSizeW * 3));
+		result = sqrtf(result / (float)sampleN);
 		m_fRMSEResult = result;
 		std::cout << "RMSE : " << result << "\n";
+
+		// Debuging...
+		result = 0;
+		uint32 resultInd = 0;
+		for (uint32 i = 0; i < sampleN; i++)
+		{
+			if (std::fabs(m_raytracer.GetResult()[i]) > result)
+			{
+				result = std::fabs(m_raytracer.GetResult()[i]);
+				resultInd = i;
+			}
+		}
+		std::cout << "debug0 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
+
+		result = 0;
+		resultInd = 0;
+		for (uint32 i = 0; i < sampleN; i++)
+		{
+			if (std::fabs(m_pCapturedConvergedResult[i]) > result)
+			{
+				result = std::fabs(m_pCapturedConvergedResult[i]);
+				resultInd = i;
+			}
+		}
+		std::cout << "debug1 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
 	}
 	else
 	{

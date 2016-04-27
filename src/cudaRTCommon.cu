@@ -281,6 +281,91 @@ __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3)
 	return make_float3(vec3._x, vec3._y, vec3._z);
 }
 
+__device__ bool ProbabilityRand(curandState* state, const float prob)
+{
+	if (prob < M_FLT_BIAS_EPSILON)
+		return false;
+	if (prob + M_FLT_BIAS_EPSILON > 1.0f)
+		return true;
+	return curand_uniform(state) < prob;
+}
+
+#pragma region SHADING_FUNC
+__device__ float3 Diffuse_Lambert(float3 DiffuseColor)
+{
+	return DiffuseColor * (1 / M_PI);
+}
+
+__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL)
+{
+	//float a = Roughness * Roughness;
+	//float Vis_SmithV = NoL * (NoV * (1 - a) + a);
+	//float Vis_SmithL = NoV * (NoL * (1 - a) + a);
+	//return 0.5 * rcpf(Vis_SmithV + Vis_SmithL);
+	float k = (Roughness * Roughness) / 2.0f; // (Roughness + 1) * (Roughness + 1) / 8.f;
+	return (NoV / (NoV * (1 - k) + k))*(NoL / (NoL * (1 - k) + k));
+}
+
+__device__ float D_GGX(float Roughness, float NoH)
+{
+	float m = Roughness * Roughness;
+	float m2 = m*m;
+	float d = (NoH * m2 - NoH) * NoH + 1;
+	return m2 / (M_PI*d*d);
+}
+
+__device__ float3 F_Schlick(float3 SpecularColor, float VoH)
+{
+	float Fc = pow(1 - VoH, 5);
+	float firstTerm = saturate(50.0 * SpecularColor.z) * Fc;
+	return make_float3(firstTerm, firstTerm, firstTerm) + (1 - Fc) * SpecularColor;
+}
+
+__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N)
+{
+	float a = Roughness * Roughness;
+	float Phi = 2 * M_PI * Xi.x;
+	float CosTheta = sqrt((1 - Xi.y) / (1 + (a*a - 1) * Xi.y));
+	float SinTheta = sqrt(1 - CosTheta * CosTheta);
+	float3 H;
+	H.x = SinTheta * cos(Phi);
+	H.y = SinTheta * sin(Phi);
+	H.z = CosTheta;
+	//float3 UpVector = abs(N.z) < 0.999 ? make_float3(0, 0, 1) : make_float3(1, 0, 0);
+	//float3 TangentX = normalize(vecCross(UpVector, N));
+	//float3 TangentY = vecCross(N, TangentX);
+
+	float3 w = N;
+	float3 u = normalize(vecCross((fabs(w.x) > .1 ? make_float3(0, 1, 0) : make_float3(1, 0, 0)), w));
+	float3 v = vecCross(w, u);
+	u = vecCross(v, w);
+
+	// Tangent to world space
+	return (u * H.x + v * H.y + w * H.z);
+}
+
+__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH)
+{
+	return Diffuse_Lambert(DiffuseColor);
+}
+
+__device__ float Distribution(float Roughness, float NoH)
+{
+	return D_GGX(Roughness, NoH);
+}
+
+__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH)
+{
+	return Vis_SmithJointApprox(Roughness, NoV, NoL);
+}
+
+__device__ float3 Fresnel(float3 SpecularColor, float VoH)
+{
+	return F_Schlick(SpecularColor, VoH);
+}
+
+#pragma endregion SHADING_FUNC
+
 __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures
 	,float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness
 	, float &anisotropic, float &sheen, float &sheenTint, float &clearcoat, float &clearcoatGloss)

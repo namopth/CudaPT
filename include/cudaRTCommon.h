@@ -80,6 +80,20 @@ __device__ bool TraceCost(const CURay &ray, uint& result, bool& isLeaf, const fl
 __hd__ float4 V32F4(const NPMathHelper::Vec3& vec3);
 __hd__ float3 V32F3(const NPMathHelper::Vec3& vec3);
 
+__device__ bool ProbabilityRand(curandState* state, const float prob);
+
+#pragma region SHADING_FUNC
+__device__ float3 Diffuse_Lambert(float3 DiffuseColor);
+__device__ float Vis_SmithJointApprox(float Roughness, float NoV, float NoL);
+__device__ float D_GGX(float Roughness, float NoH);
+__device__ float3 F_Schlick(float3 SpecularColor, float VoH);
+__device__ float3 ImportanceSampleGGX(float2 Xi, float Roughness, float3 N);
+__device__ float3 Diffuse(float3 DiffuseColor, float Roughness, float NoV, float NoL, float VoH);
+__device__ float Distribution(float Roughness, float NoH);
+__device__ float GeometricVisibility(float Roughness, float NoV, float NoL, float VoH);
+__device__ float3 Fresnel(float3 SpecularColor, float VoH);
+#pragma endregion SHADING_FUNC
+
 __device__ void GetMaterialColors(const RTMaterial* mat, const float2 uv, const CURTTexture* textures,
 	float3 &diff, float3 &normal, float3 &emissive, float &trans, float &specular, float &metallic, float &roughness
 	, float &anisotropic, float &sheen, float &sheenTint, float &clearcoat, float &clearcoatGloss);
