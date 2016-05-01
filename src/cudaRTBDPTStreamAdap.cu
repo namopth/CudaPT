@@ -12,8 +12,17 @@
 
 namespace cudaRTBDPTStreamAdap
 {
-	CUDA_RT_COMMON_ATTRIBS_N(0)
+	const char* g_enumAdapModeName[] = {"PDF", "Const"};
+	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
+	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
+	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob" };
+	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 3, 0);
+
+	CUDA_RT_COMMON_ATTRIBS_N(3)
 	CUDA_RT_COMMON_ATTRIBS_BGN
+	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
 
 	struct LightVertex
@@ -29,9 +38,12 @@ namespace cudaRTBDPTStreamAdap
 		float metallic;
 		float roughness;
 
+		float pathPotential;
+
 		__hd__ LightVertex()
 		{
 			pos = norm = irrad = irradDir = make_float3(0.f, 0.f, 0.f);
+			pathPotential = 1.f;
 		}
 	};
 
@@ -108,6 +120,10 @@ void updateLightTriCudaMem(RTScene* scene)
 		float origSpecular;
 		float origTrans;
 
+		// for adaptive sampling
+		float pathPotential;
+		float pathAccumPotential;
+
 		__device__ PTPathVertex()
 			: isTerminated(true)
 			, pathPixel(make_uint2(0,0))
@@ -128,6 +144,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			, origRoughness(0.f)
 			, origSpecular(0.f)
 			, origTrans(0.f)
+			, pathPotential(1.f)
+			, pathAccumPotential(0.f)
 		{}
 
 		__device__ PTPathVertex(uint _isTerminated, uint2 _pathPixel, float3 _pathOutDir, float3 _pathVertexPos, RAYTYPE _pathType, curandState _randState)
@@ -150,6 +168,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			, origRoughness(0.f)
 			, origSpecular(0.f)
 			, origTrans(0.f)
+			, pathPotential(1.f)
+			, pathAccumPotential(0.f)
 		{}
 	};
 
@@ -189,6 +209,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
 	float* g_devResultVarData = nullptr;
+	uint* g_devSampleResultN = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -252,6 +273,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			lightVertices[curLightVerticesSize + x].specular = specular;
 			lightVertices[curLightVerticesSize + x].metallic = metallic;
 			lightVertices[curLightVerticesSize + x].roughness = roughness;
+			lightVertices[curLightVerticesSize + x].pathPotential = procVertex->pathPotential;
 			{
 				// Get some random microfacet
 				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);
@@ -260,6 +282,11 @@ void updateLightTriCudaMem(RTScene* scene)
 				float voH = vecDot(-1 * ray.dir, hDir);
 				float3 f0 = vecLerp(0.08 * make_float3(specular, specular, specular), diff, metallic);
 				float3 brdf_f = Fresnel(f0, voH);
+
+				// PDF
+				float NoH = vecDot(nl, hDir);
+				float VoH = vecDot(-1 * ray.dir, hDir);
+				float pdf = D_GGX(roughness, NoH) * NoH / (4.f * VoH);
 
 				// Reflected or Refracted
 				float reflProb = lerp(length(brdf_f), 1.0f, metallic);
@@ -305,14 +332,13 @@ void updateLightTriCudaMem(RTScene* scene)
 					// Microfacet specular = D*G*F / (4*NoL*NoV)
 					// pdf = D * NoH / (4 * VoH)
 					// (G * F * VoH) / (NoV * NoH)
-					float VoH = vecDot(-1 * ray.dir, hDir);
 					float NoV = vecDot(nl, -1 * ray.dir);
-					float NoH = vecDot(nl, hDir);
 					float NoL = vecDot(nl, reflDir);
 					float G = GeometricVisibility(roughness, NoV, NoL, VoH);
 					//shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
 					lightMulTerm = (brdf_f * G * VoH) / (NoV * NoH * reflProb);
 					nextRayType = RAYTYPE_SPEC;
+					pdf *= reflProb;
 				}
 
 				// Diffused or Transmited
@@ -327,6 +353,7 @@ void updateLightTriCudaMem(RTScene* scene)
 						//shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
 						lightMulTerm = cosine * diff / (refrProb * (1 - reflProb));
 						nextRayType = RAYTYPE_SPEC;
+						pdf *= (refrProb * (1.f - reflProb));
 					}
 					// Diffused
 					else
@@ -350,10 +377,12 @@ void updateLightTriCudaMem(RTScene* scene)
 						//shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
 						lightMulTerm = M_PI * Diffuse(diff, roughness, NoV, NoL, VoH) / ((1 - refrProb) * (1 - reflProb));
 						nextRayType = RAYTYPE_DIFF;
+						pdf *= ((1.f - refrProb) * (1.f - reflProb)) * vecDot(diffDir, nl);
 					}
 				}
 
 				procVertex->pathSample = emissive + vecMul(procVertex->pathSample, lightMulTerm);
+				procVertex->pathPotential *= pdf;
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
@@ -427,6 +456,11 @@ void updateLightTriCudaMem(RTScene* scene)
 				float3 f0 = vecLerp(0.08 * make_float3(specular, specular, specular), diff, metallic);
 				float3 brdf_f = Fresnel(f0, voH);
 
+				// PDF
+				float NoH = vecDot(nl, hDir);
+				float VoH = vecDot(-1 * ray.dir, hDir);
+				float pdf = D_GGX(roughness, NoH) * NoH / (4.f * VoH);
+
 				// Reflected or Refracted
 				float reflProb = lerp(length(brdf_f), 1.0f, metallic);
 				float refrProb = trans;
@@ -471,14 +505,13 @@ void updateLightTriCudaMem(RTScene* scene)
 					// Microfacet specular = D*G*F / (4*NoL*NoV)
 					// pdf = D * NoH / (4 * VoH)
 					// (G * F * VoH) / (NoV * NoH)
-					float VoH = vecDot(-1 * ray.dir, hDir);
 					float NoV = vecDot(nl, -1 * ray.dir);
-					float NoH = vecDot(nl, hDir);
 					float NoL = vecDot(nl, reflDir);
 					float G = GeometricVisibility(roughness, NoV, NoL, VoH);
 					//shadeResult = vecMul((brdf_f * G * VoH) / (NoV * NoH * reflProb) , nextRayResult.light) + emissive;
 					lightMulTerm = (brdf_f * G * VoH) / (NoV * NoH * reflProb);
 					nextRayType = RAYTYPE_SPEC;
+					pdf *= reflProb;
 				}
 
 				// Diffused or Transmited
@@ -493,6 +526,7 @@ void updateLightTriCudaMem(RTScene* scene)
 						//shadeResult = (cosine * vecMul(diff, nextRayResult.light)) / (refrProb * (1 - reflProb)) + emissive;
 						lightMulTerm = cosine * diff / (refrProb * (1 - reflProb));
 						nextRayType = RAYTYPE_SPEC;
+						pdf *= (refrProb * (1.f - reflProb));
 					}
 					// Diffused
 					else
@@ -516,6 +550,7 @@ void updateLightTriCudaMem(RTScene* scene)
 						//shadeResult = (M_PI * vecMul(Diffuse(diff, roughness, NoV, NoL, VoH), nextRayResult.light)) / ((1 - refrProb) * (1 - reflProb)) + emissive;
 						lightMulTerm = M_PI * Diffuse(diff, roughness, NoV, NoL, VoH) / ((1 - refrProb) * (1 - reflProb));
 						nextRayType = RAYTYPE_DIFF;
+						pdf *= ((1.f - refrProb) * (1.f - reflProb)) * vecDot(diffDir, nl);
 					}
 				}
 
@@ -529,6 +564,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				procVertex->origSpecular = specular;
 				procVertex->origTrans = trans;
 				procVertex->pathInMulTerm = procVertex->pathOutMulTerm;
+				procVertex->pathPotential *= pdf;
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
@@ -538,6 +574,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
 				{
 					procVertex->pathAccumSample = procVertex->pathAccumSample + procVertex->pathSample;
+					procVertex->pathAccumPotential = procVertex->pathAccumPotential + procVertex->pathPotential;
 					procVertex->pathSampleN++;
 					procVertex->isTerminated = true;
 				}
@@ -555,6 +592,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		else
 		{
 			procVertex->pathAccumSample = procVertex->pathAccumSample + procVertex->pathSample;
+			procVertex->pathAccumPotential = procVertex->pathAccumPotential + procVertex->pathPotential;
 			procVertex->pathSampleN++;
 			procVertex->isTerminated = true;
 		}
@@ -681,7 +719,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		pathQueue[ind] = x + y * width;
 
-		if (curand_uniform(&randstate) > 0.4f) // genChance[ind])
+		if (curand_uniform(&randstate) > genChance[ind])
 		{
 			pathQueue[ind] = 0 - 1;
 		}
@@ -733,7 +771,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		return vecMul(lightInIrrad*noL, diffspec.y*specIrrad + diffspec.x*diffIrrad);
 	}
 
-	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, LightVertex* lightVertices, uint lightVerticesSize, curandState* randstate, float3& irrad, float3& irradDir)
+	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, LightVertex* lightVertices, uint lightVerticesSize, curandState* randstate, float3& irrad, float3& irradDir, float& pathPotential)
 	{
 		//LightVertex dummy;
 		//dummy.diff = make_float3(1.f, 1.f, 1.f);
@@ -760,8 +798,8 @@ void updateLightTriCudaMem(RTScene* scene)
 				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
 			else
 				irrad = lightVertex->irrad;
-			irrad = irrad;
 			irradDir = toLightVertexDir;
+			pathPotential = lightVertex->pathPotential;
 		}
 	}
 
@@ -774,8 +812,9 @@ void updateLightTriCudaMem(RTScene* scene)
 		PTPathVertex* eyePath = eyeStream[ind];
 		float3 lightFromLightVertex = make_float3(0.f, 0.f, 0.f);
 		float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
+		float lightPathPotential = 1.f;
 		GetLightFromRandLightVertices(eyePath->pathVertexPos + eyePath->origNorm * M_FLT_BIAS_EPSILON, eyePath->origNorm
-			, lightVertices, lightVerticesSize, &eyePath->randState, lightFromLightVertex, toLightVertexDir);
+			, lightVertices, lightVerticesSize, &eyePath->randState, lightFromLightVertex, toLightVertexDir, lightPathPotential);
 		float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
 			, GetShadingResult(eyePath->pathInDir, toLightVertexDir, lightFromLightVertex, eyePath->origNorm
 			, eyePath->origDiff, eyePath->origMetallic, eyePath->origRoughness, eyePath->origSpecular
@@ -785,6 +824,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		{
 			eyePath->pathAccumSample = eyePath->pathAccumSample + vecMul(lightContribFromLightVertex, eyePath->pathInMulTerm);
 			eyePath->pathSampleN += 4;
+			eyePath->pathPotential *= lightPathPotential;
 		}
 	}
 
@@ -804,7 +844,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
-	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult)
+	__global__ void pt_debugTracedPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, float* varResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -814,18 +854,65 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (!pathQueue[x].isTerminated)
 		{
 			pathQueue[x].pathAccumSample = pathQueue[x].pathAccumSample + pathQueue[x].pathSample;
+			pathQueue[x].pathAccumPotential = pathQueue[x].pathAccumPotential + pathQueue[x].pathPotential;
 			pathQueue[x].pathSampleN++;
 		}
 
 		if (pathQueue[x].pathSampleN > 0)
 		{
-			float3 sampleResult = pathQueue[x].pathAccumSample / (float)pathQueue[x].pathSampleN;
-			float resultInf = 1.f / (float)(frameN + 1);
-			float oldInf = 1.f - resultInf;
 			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+			if (!frameN)
+			{
+				sampleResultN[ind] = 0;
+			}
+			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
+
+			float3 sampleResult = make_float3(1.f,1.f,1.f);
+			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
+			float resultInf = 1.f / (float)(tempNextSampleResultN);
+			float oldInf = sampleResultN[ind] * resultInf;
+
 			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
 			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
 			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+			varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+			sampleResultN[ind] = tempNextSampleResultN;
+		}
+	}
+
+	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, float* varResult, uint* sampleResultN)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (x >= pathQueueSize) return;
+
+		// add calculating sample to the result
+		if (!pathQueue[x].isTerminated)
+		{
+			pathQueue[x].pathAccumSample = pathQueue[x].pathAccumSample + pathQueue[x].pathSample;
+			pathQueue[x].pathAccumPotential = pathQueue[x].pathAccumPotential + pathQueue[x].pathPotential;
+			pathQueue[x].pathSampleN++;
+		}
+
+		if (pathQueue[x].pathSampleN > 0)
+		{
+			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+			if (!frameN)
+			{
+				sampleResultN[ind] = 0;
+			}
+			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
+
+			float3 sampleResult = pathQueue[x].pathAccumSample;
+			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
+			float resultInf = 1.f / (float)(tempNextSampleResultN);
+			float oldInf = sampleResultN[ind] * resultInf;
+			
+			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
+			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+			varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+			sampleResultN[ind] = tempNextSampleResultN;
 		}
 	}
 
@@ -834,6 +921,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
+		CUFREE(g_devSampleResultN);
 		CUFREE(g_devResultVarData);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
@@ -960,6 +1048,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
 			CUFREE(g_devResultVarData);
 			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
+			CUFREE(g_devSampleResultN);
+			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1031,7 +1121,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			//std::cout << "trace path: " << time << std::endl;
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
-			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
+				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
@@ -1049,6 +1140,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			std::vector<uint> pathQueuesSize;
 			uint accumPathQueueSize = 0;
 			uint genSize = width * height;
+			//uint debugLoopTime = 0;
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
@@ -1061,7 +1153,9 @@ void updateLightTriCudaMem(RTScene* scene)
 				accumPathQueueSize += compactedGenSize;
 				if (compactedGenSize == 0) break;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
+				//debugLoopTime++;
 			}
+			//std::cout << "Debug Loop Time: " << debugLoopTime << "\n";
 
 			// fill temp path
 			int unfilledPathQueueSize = genSize - accumPathQueueSize;
@@ -1093,8 +1187,16 @@ void updateLightTriCudaMem(RTScene* scene)
 			accumPathQueueSize = 0;
 			for (auto pathQueueSize : pathQueuesSize)
 			{
-				pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-					(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+				if (*g_enumDebugMode.GetUint() == 1)
+				{
+					pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
+						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+				}
+				else
+				{
+					pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
+						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+				}
 				accumPathQueueSize += pathQueueSize;
 			}
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
