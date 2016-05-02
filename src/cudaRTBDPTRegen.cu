@@ -37,6 +37,7 @@ namespace cudaRTBDPTRegen
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
+	uint* g_devSampleResultN = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -574,7 +575,7 @@ namespace cudaRTBDPTRegen
 					sample.pixelContrib = 0.f;
 
 				bool isAccum = (sample.pathDepth == 0);
-				if (curand_uniform(tracerData.randstate) >= sample.pixelContrib)
+				if (!ProbabilityRand(tracerData.randstate,sample.pixelContrib))
 				{
 					sample.pixelContrib = 1.0f;
 					sample.pathDepth = 0;
@@ -610,7 +611,7 @@ namespace cudaRTBDPTRegen
 
 				if (isAccum && sample.sampleTime > 0)
 				{
-					sample.accumResult = sample.accumResult + sample.sampleResult / (float)sample.sampleTime;
+					sample.accumResult = sample.accumResult + sample.sampleResult;
 					sample.sampleResult = make_float3(0.f, 0.f, 0.f);
 				}
 			}
@@ -631,14 +632,14 @@ namespace cudaRTBDPTRegen
 
 	__global__ void pt0_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
 		float width, float height,LightVertex* lightVertices, RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials, CURTTexture* textures
-		, uint32 frameN, uint32 hashedFrameN, float* result, float* accResult)
+		, uint32 frameN, uint32 hashedFrameN, float* result, float* accResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		uint y = blockIdx.y * blockDim.y + threadIdx.y;
 		if (x >= width || y >= height) 
 			return;
 
-		uint ind = (y * width + x) * 3;
+		uint ind = (y * width + x);
 		int threadId = (blockIdx.x + blockIdx.y * gridDim.x) * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x;
 
 
@@ -659,11 +660,17 @@ namespace cudaRTBDPTRegen
 		TracerData tracerData(&winSize, fov, &camPos, &camUp, &camRight, &camDir, lightVertices, vertices, triangles, materials, textures, &randstate);
 		pt0_normalRay(ray, RAYTYPE_EYE, sampleResult, tracerData);
 
-		float resultInf = 1.f / (float)(frameN + 1);
-		float oldInf = 1.f - resultInf;
-		result[ind] = max(resultInf * sampleResult.accumResult.x + oldInf * result[ind], 0.f);
-		result[ind + 1] = max(resultInf * sampleResult.accumResult.y + oldInf * result[ind + 1], 0.f);
-		result[ind + 2] = max(resultInf * sampleResult.accumResult.z + oldInf * result[ind + 2], 0.f);
+		if (!frameN)
+		{
+			sampleResultN[ind] = 0;
+		}
+		uint tempNextSampleResultN = sampleResultN[ind] + sampleResult.sampleTime;
+		float resultInf = 1.f / (float)(tempNextSampleResultN);
+		float oldInf = sampleResultN[ind] * resultInf;
+		result[ind * 3] = max(resultInf * sampleResult.accumResult.x + oldInf * result[ind * 3], 0.f);
+		result[ind * 3 + 1] = max(resultInf * sampleResult.accumResult.y + oldInf * result[ind * 3 + 1], 0.f);
+		result[ind * 3 + 2] = max(resultInf * sampleResult.accumResult.z + oldInf * result[ind * 3 + 2], 0.f);
+		sampleResultN[ind] = tempNextSampleResultN;
 	}
 
 	void CleanMem()
@@ -673,6 +680,7 @@ namespace cudaRTBDPTRegen
 		CUFREE(g_devAccResultData);
 		CUFREE(g_devLightVertices);
 		CUFREE(g_devLightTri);
+		CUFREE(g_devSampleResultN);
 	}
 
 	void initLightVerticesCudaMem(RTScene* scene)
@@ -756,6 +764,8 @@ namespace cudaRTBDPTRegen
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devSampleResultN);
+			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -775,7 +785,7 @@ namespace cudaRTBDPTRegen
 		dim3 block(BLOCK_SIZE, BLOCK_SIZE, 1);
 		dim3 grid(ceil(width / (float)block.x), ceil(height / (float)block.y), 1);
 		pt0_kernel << < grid, block >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height, g_devLightVertices, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures
-			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devResultData, g_devAccResultData);
+			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devResultData, g_devAccResultData, g_devSampleResultN);
 
 		// Copy result to host
 		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);

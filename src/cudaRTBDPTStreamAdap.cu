@@ -15,14 +15,16 @@ namespace cudaRTBDPTStreamAdap
 	const char* g_enumAdapModeName[] = {"PDF", "Const"};
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
-	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob" };
-	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 3, 0);
+	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.2f);
+	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
+	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
 
-	CUDA_RT_COMMON_ATTRIBS_N(3)
+	CUDA_RT_COMMON_ATTRIBS_N(4)
 	CUDA_RT_COMMON_ATTRIBS_BGN
 	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Debug Mode, g_enumDebugMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
 
 	struct LightVertex
@@ -705,7 +707,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	}
 
 	__global__ void pt_genTempAdapPathQueue_kernel(float width, float height, uint32 hashedFrameN, uint32 seedoffset
-		, float* genChance, uint* pathQueue)
+		, float* genChance, uint* pathQueue, float minProb = 0.f)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -719,7 +721,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		pathQueue[ind] = x + y * width;
 
-		if (curand_uniform(&randstate) > genChance[ind])
+		if (curand_uniform(&randstate) > fmaxf(genChance[ind], minProb))
 		{
 			pathQueue[ind] = 0 - 1;
 		}
@@ -844,6 +846,15 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
+	__global__ void pt_applyPixelProbToResult_kernel(uint width, uint height, float* result, float* varResult, float minProb = 0.f)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+		uint y = blockIdx.y * blockDim.y + threadIdx.y;
+		if (x >= width || y >= height) return;
+		uint ind = (y * width + x);
+		result[ind * 3] = result[ind * 3 + 1] = result[ind * 3 + 2] = fmaxf(minProb, varResult[ind]);
+	}
+
 	__global__ void pt_debugTracedPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, float* varResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -902,17 +913,19 @@ void updateLightTriCudaMem(RTScene* scene)
 				sampleResultN[ind] = 0;
 			}
 			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
+			if (tempNextSampleResultN > sampleResultN[ind])
+			{
+				float3 sampleResult = pathQueue[x].pathAccumSample;
+				float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
+				float resultInf = 1.f / (float)(tempNextSampleResultN);
+				float oldInf = sampleResultN[ind] * resultInf;
 
-			float3 sampleResult = pathQueue[x].pathAccumSample;
-			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
-			float resultInf = 1.f / (float)(tempNextSampleResultN);
-			float oldInf = sampleResultN[ind] * resultInf;
-			
-			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
-			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
-			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-			varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
-			sampleResultN[ind] = tempNextSampleResultN;
+				result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+				result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
+				result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+				varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+				sampleResultN[ind] = tempNextSampleResultN;
+			}
 		}
 	}
 
@@ -1145,7 +1158,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			{
 				// generate path into temp path
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
-					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize);
+					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
+					, *g_fMinTraceProb.GetFloat());
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
@@ -1204,6 +1218,10 @@ void updateLightTriCudaMem(RTScene* scene)
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
 			//std::cout << "accum path: " << time << std::endl;
 
+		}
+		if (*g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
+		{
+			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
 		}
 
 		// Copy result to host

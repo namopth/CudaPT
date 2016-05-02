@@ -161,6 +161,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
+	uint* g_devSampleResultN = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -725,7 +726,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
-	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult)
+	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -740,13 +741,24 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		if (pathQueue[x].pathSampleN > 0)
 		{
-			float3 sampleResult = pathQueue[x].pathAccumSample / (float)pathQueue[x].pathSampleN;
-			float resultInf = 1.f / (float)(frameN + 1);
-			float oldInf = 1.f - resultInf;
 			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
-			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
-			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
-			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+			if (!frameN)
+			{
+				sampleResultN[ind] = 0;
+			}
+			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
+
+			if (tempNextSampleResultN > sampleResultN[ind])
+			{
+				float3 sampleResult = pathQueue[x].pathAccumSample;
+				float resultInf = 1.f / (float)(tempNextSampleResultN);
+				float oldInf = sampleResultN[ind] * resultInf;
+
+				result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+				result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
+				result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+				sampleResultN[ind] = tempNextSampleResultN;
+			}
 		}
 	}
 
@@ -757,6 +769,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		freeAllBVHCudaMem();
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
+		CUFREE(g_devSampleResultN);
 	}
 
 	//struct ray_greater_compare
@@ -830,6 +843,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devSampleResultN);
+			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -911,7 +926,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			}
 
 		}
-		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData);
+		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >
+			(g_devPathQueue, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devSampleResultN);
 
 		// Copy result to host
 		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
