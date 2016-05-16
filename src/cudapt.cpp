@@ -211,8 +211,18 @@ int CUDAPTWindow::OnInit()
 	return 0;
 }
 
+#ifdef ADAPCHEAT
+namespace cudaRTBDPTStreamAdapCheat
+{
+	extern float* m_gConvergedResult;
+}
+#endif
+
 int CUDAPTWindow::OnTick(const float deltaTime)
 {
+#ifdef ADAPCHEAT
+	cudaRTBDPTStreamAdapCheat::m_gConvergedResult = m_pCapturedConvergedResult;
+#endif
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");
 	m_uDeltaTimeSec = (uint32)(deltaTime * 1000.f);
 	m_fFPS = (deltaTime > M_EPSILON) ? 1.f / deltaTime : 0.f;

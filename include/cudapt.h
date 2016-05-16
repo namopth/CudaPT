@@ -13,6 +13,8 @@
 #include "macrohelper.h"
 #include "raytracer.h"
 
+#define ADAPCHEAT
+
 class CUDAPTWindow : public NPGLHelper::Window
 {
 public:
