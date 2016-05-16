@@ -34,6 +34,11 @@ namespace NPConfFileHelper
 			m_sUnwrittenDataStream << data << "\t";
 		}
 
+		template<typename T> void WriteRaw(const T& data)
+		{
+			m_sUnwrittenDataStream << data;
+		}
+
 		void Write(const NPMathHelper::Vec3& data)
 		{
 			m_sUnwrittenDataStream << data._x << "\t" << data._y << "\t" << data._z << "\t";

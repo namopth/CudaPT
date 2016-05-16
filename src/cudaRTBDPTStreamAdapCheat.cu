@@ -1,7 +1,10 @@
 #include "cudaRTCommon.h"
 
+#include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/execution_policy.h>
+
+#include "conffilehelper.h"
 
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 5
@@ -27,7 +30,7 @@ namespace cudaRTBDPTStreamAdapCheat
 	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
 
-	float* m_gConvergedResult = nullptr;
+	float* g_fConvergedResult = nullptr;
 
 	struct LightVertex
 	{
@@ -213,6 +216,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
 	float* g_devResultVarData = nullptr;
+	float* g_devConvergedData = nullptr;
 	uint* g_devSampleResultN = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
@@ -931,11 +935,24 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
+
+	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint dataSize)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+		if (x >= dataSize)
+			return;
+		resultData[x] = ((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
+			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
+			) / 3.f;
+	}
+
 	void CleanMem()
 	{
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
+		CUFREE(g_devConvergedData);
 		CUFREE(g_devSampleResultN);
 		CUFREE(g_devResultVarData);
 		CUFREE(g_devResultData);
@@ -1020,7 +1037,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		, float width, float height, float* result)
 	{
 		// Check and allocate everything
-		if (!scene || !scene->GetCompactBVH()->IsValid())
+		if (!scene || !scene->GetCompactBVH()->IsValid() || !g_fConvergedResult)
 			return false;
 
 		NPMathHelper::Vec3 camRight = camDir.cross(camUp).normalize();
@@ -1054,7 +1071,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height))
+		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devConvergedData)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
@@ -1065,6 +1082,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
 			CUFREE(g_devSampleResultN);
 			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
+			CUFREE(g_devConvergedData);
+			cudaMalloc((void**)&g_devConvergedData, g_resultDataSize);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1111,6 +1130,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		if (g_uCurFrameN == 0)
 		{
+			cudaMemcpy(g_devConvergedData, g_fConvergedResult, sizeof(float) * 3 * (uint)width * (uint)height, cudaMemcpyHostToDevice);
 			//float time;
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
@@ -1149,6 +1169,23 @@ void updateLightTriCudaMem(RTScene* scene)
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
 			//HANDLE_ERROR(cudaEventCreate(&stop));
+
+			// calculate sampling map from converged result
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, (uint)(width * height));
+
+			//if (g_uCurFrameN == 1)
+			//{
+			//	float* tempDiffData = new float[(uint)width * (uint)height];
+			//	cudaMemcpy(tempDiffData, g_devResultVarData, (uint)(width * height) * sizeof(float), cudaMemcpyDeviceToHost);
+			//	NPConfFileHelper::txtConfFile conf("adapCheat_diffData.txt");
+			//	for (uint j = 0; j < width * height; j++)
+			//	{
+			//		conf.WriteRaw<float>(tempDiffData[j]);
+			//		conf.WriteRaw("\n");
+			//	}
+			//	conf.SyncDataToFile();
+			//	DELETE_ARRAY(tempDiffData);
+			//}
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			// gen adaptive eye paths
