@@ -18,7 +18,7 @@ namespace cudaRTBDPTStreamAdapCheat
 	const char* g_enumAdapModeName[] = {"PDF", "Const"};
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
-	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.2f);
+	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
 
@@ -1172,6 +1172,9 @@ void updateLightTriCudaMem(RTScene* scene)
 
 			// calculate sampling map from converged result
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, (uint)(width * height));
+			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			float meanMSE = sumMSE / (width * height);
+			std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
 			//{
