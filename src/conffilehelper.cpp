@@ -111,5 +111,6 @@ namespace NPConfFileHelper
 			fileStream.close();
 			m_sUnwrittenDataStream.clear();
 		}
+		return true;
 	}
 }

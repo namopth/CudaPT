@@ -19,6 +19,15 @@
     <Filter Include="Cuda Files">
       <UniqueIdentifier>{0b4c48db-a480-4ae2-aa77-43f1891518d3}</UniqueIdentifier>
     </Filter>
+    <Filter Include="3rdParty">
+      <UniqueIdentifier>{99c990aa-7481-4fb5-81fb-07ffed321fd8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\FANN">
+      <UniqueIdentifier>{25074020-0814-4d09-a47e-8823ca6f69e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="3rdParty\FANN\Header Files">
+      <UniqueIdentifier>{c92d9f2d-b54b-4d64-a643-4452fd49b7e3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\atbhelper.h">
@@ -74,6 +83,48 @@
     </ClInclude>
     <ClInclude Include="..\include\conffilehelper.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_cpp.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_data.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_error.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_internal.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_io.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_train.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fixedfann.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\floatfann.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\compat_time.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\config.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\doublefann.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_activation.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\3rdparty\fann\include\fann_cascade.h">
+      <Filter>3rdParty\FANN\Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

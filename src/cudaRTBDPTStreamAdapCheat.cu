@@ -6,6 +6,9 @@
 
 #include "conffilehelper.h"
 
+#define FANN_NO_DLL
+#include "floatfann.h"
+
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 5
 #define PATHSTREAM_SIZE 1E4*64
