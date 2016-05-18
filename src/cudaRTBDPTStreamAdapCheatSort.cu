@@ -6,9 +6,6 @@
 
 #include "conffilehelper.h"
 
-#define FANN_NO_DLL
-#include "floatfann.h"
-
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 5
 #define PATHSTREAM_SIZE 1E4*64
@@ -1176,6 +1173,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 			// calculate sampling map from converged result
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, (uint)(width * height));
+			thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
 			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
 			float meanMSE = sumMSE / (width * height);

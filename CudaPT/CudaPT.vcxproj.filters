@@ -201,5 +201,8 @@
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheat.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheatSort.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
