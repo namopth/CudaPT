@@ -13,21 +13,23 @@
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
 
-namespace cudaRTBDPTStreamAdapCheat
+namespace cudaRTBDPTStreamAdapCheatSort
 {
 	const char* g_enumAdapModeName[] = {"PDF", "Const"};
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
 	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
+	NPAttrHelper::Attrib g_uiMinTraceProb("DesiredTraceTimes", 5);
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
 
-	CUDA_RT_COMMON_ATTRIBS_N(4)
+	CUDA_RT_COMMON_ATTRIBS_N(5)
 	CUDA_RT_COMMON_ATTRIBS_BGN
 	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Desired Trace Time, g_uiMinTraceProb)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
 
 	float* g_fConvergedResult = nullptr;
@@ -216,6 +218,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
 	float* g_devResultVarData = nullptr;
+	uint* g_devKeyVarData = nullptr;
 	float* g_devConvergedData = nullptr;
 	uint* g_devSampleResultN = nullptr;
 
@@ -734,6 +737,26 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
+	__global__ void pt_genTempAdapPathQueueByKey_kernel(float size, uint32 hashedFrameN, uint32 seedoffset
+		, float* genChance, uint* genChanceKey, uint* pathQueue, float minProb = 0.f, float mulRand = 1.f)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (x >= size) return;
+
+		curandState randstate;
+		curand_init(hashedFrameN + x + seedoffset, 0, 0, &randstate);
+
+		uint ind = genChanceKey[x];
+		pathQueue[x] = ind;
+
+		//float modChance = 1.f - expf(-genChance[ind]);
+		//if (curand_uniform(&randstate)*mulRand > fmaxf(genChance[ind], minProb))
+		//{
+		//	pathQueue[x] = 0 - 1;
+		//}
+	}
+
 	__global__ void pt_convTempPathQueue_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
 		float width, float height, uint32 frameN, uint32 hashedFrameN, uint* tempPathQueue, uint tempPathQueueSize, PTPathVertex* pathQueue)
 	{
@@ -937,7 +960,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	}
 
 
-	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint dataSize)
+	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint* resultKey, uint dataSize)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dataSize)
@@ -946,6 +969,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
 			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
 			) / 3.f, 1.f);
+		resultKey[x] = x;
 	}
 
 	void CleanMem()
@@ -955,6 +979,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		freeAllBVHCudaMem();
 		CUFREE(g_devConvergedData);
 		CUFREE(g_devSampleResultN);
+		CUFREE(g_devKeyVarData);
 		CUFREE(g_devResultVarData);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
@@ -1072,13 +1097,15 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devConvergedData)
+		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devConvergedData || !g_devKeyVarData)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devKeyVarData);
+			cudaMalloc((void**)&g_devKeyVarData, sizeof(uint) * width * height);
 			CUFREE(g_devResultVarData);
 			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
 			CUFREE(g_devSampleResultN);
@@ -1172,11 +1199,13 @@ void updateLightTriCudaMem(RTScene* scene)
 			//HANDLE_ERROR(cudaEventCreate(&stop));
 
 			// calculate sampling map from converged result
-			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, (uint)(width * height));
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, g_devKeyVarData, (uint)(width * height));
+
 			thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
-			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			//thrust::sort_by_key(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), g_devKeyVarData);
+			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
-			float meanMSE = sumMSE / (width * height);
+			//float meanMSE = sumMSE / (width * height);
 			//std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
@@ -1202,11 +1231,12 @@ void updateLightTriCudaMem(RTScene* scene)
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
-				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
-					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
+				uint iterGenSize = ceil((float)(width * height) / (float)(*g_uiDesiredMaxAdaptiveSampling.GetFloat()));
+				pt_genTempAdapPathQueueByKey_kernel << < dim3(ceil(iterGenSize / (float)block1.x), 1, 1), block1 >> >  (iterGenSize
+					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devKeyVarData, g_devTempPathQueue + accumPathQueueSize
 					, *g_fMinTraceProb.GetFloat(), maxMSE);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
-					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
+					, g_devTempPathQueue + accumPathQueueSize + iterGenSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
 				pathQueuesSize.push_back(compactedGenSize);
 				accumPathQueueSize += compactedGenSize;
