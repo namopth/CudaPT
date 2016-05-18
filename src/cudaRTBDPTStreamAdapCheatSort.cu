@@ -1101,17 +1101,17 @@ void updateLightTriCudaMem(RTScene* scene)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
-			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devResultData, g_resultDataSize));
 			CUFREE(g_devAccResultData);
-			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devAccResultData, g_resultDataSize));
 			CUFREE(g_devKeyVarData);
-			cudaMalloc((void**)&g_devKeyVarData, sizeof(uint) * width * height);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devKeyVarData, sizeof(uint) * width * height));
 			CUFREE(g_devResultVarData);
-			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height));
 			CUFREE(g_devSampleResultN);
-			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height));
 			CUFREE(g_devConvergedData);
-			cudaMalloc((void**)&g_devConvergedData, g_resultDataSize);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devConvergedData, g_resultDataSize));
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1200,7 +1200,8 @@ void updateLightTriCudaMem(RTScene* scene)
 
 			// calculate sampling map from converged result
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, g_devKeyVarData, (uint)(width * height));
-
+			HANDLE_KERNEL_ERROR();
+			HANDLE_ERROR(cudaDeviceSynchronize());
 			thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
 			//thrust::sort_by_key(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), g_devKeyVarData);
 			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
