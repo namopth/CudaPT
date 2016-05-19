@@ -745,7 +745,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		if (x >= size) return;
 
-		uint genInd = genSize - 1 - x % genSize;
+		uint genInd = size - 1 - x % genSize;
 
 		//curandState randstate;
 		//curand_init(hashedFrameN + x + seedoffset, 0, 0, &randstate);
