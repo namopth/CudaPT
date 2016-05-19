@@ -9,6 +9,7 @@ DEFINE_RT(Cuda BDPT Stream Compaction, cudaRTBDPTStream)
 DEFINE_RT(Cuda BDPT Stream Compaction Adaptive, cudaRTBDPTStreamAdap)
 DEFINE_RT(Cuda BDPT Stream Compaction Adaptive Cheat, cudaRTBDPTStreamAdapCheat)
 DEFINE_RT(Cuda BDPT Stream Compaction Adaptive Cheat Sort, cudaRTBDPTStreamAdapCheatSort)
+DEFINE_RT(Cuda BDPT Stream Compaction Adaptive Bilaterial, cudaRTBDPTStreamAdapBilat)
 DEFINE_RT(Cuda Debug, cudaRTDebug)
 DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #endif
