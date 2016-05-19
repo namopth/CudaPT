@@ -1,5 +1,6 @@
 #include "cudaRTCommon.h"
 
+#include <thrust/sort.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/execution_policy.h>
@@ -19,7 +20,7 @@ namespace cudaRTBDPTStreamAdapCheatSort
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
 	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
-	NPAttrHelper::Attrib g_uiMinTraceProb("DesiredTraceTimes", 5);
+	NPAttrHelper::Attrib g_uiDesiredTraceTimes("DesiredTraceTimes", 5);
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
 
@@ -28,7 +29,7 @@ namespace cudaRTBDPTStreamAdapCheatSort
 	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Desired Trace Time, g_uiMinTraceProb)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Desired Trace Time, g_uiDesiredTraceTimes)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
 
@@ -737,17 +738,19 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
-	__global__ void pt_genTempAdapPathQueueByKey_kernel(float size, uint32 hashedFrameN, uint32 seedoffset
-		, float* genChance, uint* genChanceKey, uint* pathQueue, float minProb = 0.f, float mulRand = 1.f)
+	__global__ void pt_genTempAdapPathQueueByKey_kernel(uint size, uint32 hashedFrameN, uint32 seedoffset,
+		uint genSize, float* genChance, uint* genChanceKey, uint* pathQueue, float minProb = 0.f, float mulRand = 1.f)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
 		if (x >= size) return;
 
-		curandState randstate;
-		curand_init(hashedFrameN + x + seedoffset, 0, 0, &randstate);
+		uint genInd = genSize - 1 - x % genSize;
 
-		uint ind = genChanceKey[x];
+		//curandState randstate;
+		//curand_init(hashedFrameN + x + seedoffset, 0, 0, &randstate);
+
+		uint ind = genChanceKey[genInd];
 		pathQueue[x] = ind;
 
 		//float modChance = 1.f - expf(-genChance[ind]);
@@ -916,7 +919,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
 			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
 			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-			varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+			//varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
 			sampleResultN[ind] = tempNextSampleResultN;
 		}
 	}
@@ -953,7 +956,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
 				result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
 				result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-				varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+				//varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
 				sampleResultN[ind] = tempNextSampleResultN;
 			}
 		}
@@ -965,10 +968,10 @@ void updateLightTriCudaMem(RTScene* scene)
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dataSize)
 			return;
-		resultData[x] = fminf(((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+		resultData[x] = /*fminf(*/((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
 			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
 			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
-			) / 3.f, 1.f);
+			) / 3.f/*, 1.f)*/;
 		resultKey[x] = x;
 	}
 
@@ -1129,6 +1132,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			pt_genLightPathQueue_kernel << < dim3(ceil((float)lightPathStreamSizeCap / (float)block1.x), 1, 1), block1 >> >
 				(g_uCurFrameN, WangHash(g_uCurFrameN), g_devLightTri, g_lightTriN, g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathQueue, lightPathStreamSizeCap
 				, g_devLightVertices, 0);
+			HANDLE_KERNEL_ERROR();
 
 			uint activePathStreamSize = 0;
 			g_uLightVerticesSize = lightPathStreamSizeCap;
@@ -1141,6 +1145,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				{
 					pt_assignPathStream_kernel << < dim3(ceil((float)assignableStreamSlot / (float)block1.x), 1, 1), block1 >> >(g_devPathStream, activePathStreamSize, g_devPathQueue, g_uPathQueueCur
 						, g_uLightVerticesSize, assignableStreamSlot);
+					HANDLE_KERNEL_ERROR();
 				}
 				//readjust activePathStreamSize
 				activePathStreamSize += assignableStreamSlot;
@@ -1148,6 +1153,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				pt_traceLight_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize
 					, g_devLightVertices, g_uLightVerticesSize);
+				HANDLE_KERNEL_ERROR();
 				g_uLightVerticesSize += activePathStreamSize;
 				//compact pathstream and find activePathStreamSize value
 				PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize, is_terminated());
@@ -1170,6 +1176,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			// eye paths
 			pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
+			HANDLE_KERNEL_ERROR();
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
@@ -1186,6 +1193,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
 				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+			HANDLE_KERNEL_ERROR();
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
@@ -1201,13 +1209,13 @@ void updateLightTriCudaMem(RTScene* scene)
 			// calculate sampling map from converged result
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, g_devKeyVarData, (uint)(width * height));
 			HANDLE_KERNEL_ERROR();
-			HANDLE_ERROR(cudaDeviceSynchronize());
-			thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
-			//thrust::sort_by_key(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), g_devKeyVarData);
-			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
+			thrust::sort_by_key(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), g_devKeyVarData);
+			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
-			//float meanMSE = sumMSE / (width * height);
-			//std::cout << "meanMSE: " << meanMSE << "\n";
+			float meanMSE = sumMSE / (width * height);
+			std::cout << "maxMSE: " << maxMSE << "\n";
+			std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
 			//{
@@ -1225,26 +1233,35 @@ void updateLightTriCudaMem(RTScene* scene)
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			// gen adaptive eye paths
-			std::vector<uint> pathQueuesSize;
+			//std::vector<uint> pathQueuesSize;
 			uint accumPathQueueSize = 0;
 			uint genSize = width * height;
 			//uint debugLoopTime = 0;
-			while (accumPathQueueSize < genSize)
-			{
-				// generate path into temp path
-				uint iterGenSize = ceil((float)(width * height) / (float)(*g_uiDesiredMaxAdaptiveSampling.GetFloat()));
-				pt_genTempAdapPathQueueByKey_kernel << < dim3(ceil(iterGenSize / (float)block1.x), 1, 1), block1 >> >  (iterGenSize
-					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devKeyVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), maxMSE);
-				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
-					, g_devTempPathQueue + accumPathQueueSize + iterGenSize, is_temppathqueue_terminated());
-				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
-				pathQueuesSize.push_back(compactedGenSize);
-				accumPathQueueSize += compactedGenSize;
-				if (compactedGenSize == 0) break;
-				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
-				//debugLoopTime++;
-			}
+
+			uint selectSize = ceil((float)(width * height) / (float)(*g_uiDesiredTraceTimes.GetUint()));
+			//std::cout << "selectSize : " << selectSize << std::endl;
+			pt_genTempAdapPathQueueByKey_kernel << < dim3(ceil(genSize / (float)block1.x), 1, 1), block1 >> >  (genSize
+				, WangHash(g_uCurFrameN), accumPathQueueSize, selectSize, g_devResultVarData, g_devKeyVarData, g_devTempPathQueue + accumPathQueueSize
+				, *g_fMinTraceProb.GetFloat(), maxMSE);
+			HANDLE_KERNEL_ERROR();
+			accumPathQueueSize = genSize;
+			//while (accumPathQueueSize < genSize)
+			//{
+			//	// generate path into temp path
+			//	uint iterGenSize = ceil((float)(width * height) / (float)(*g_uiDesiredMaxAdaptiveSampling.GetFloat()));
+			//	pt_genTempAdapPathQueueByKey_kernel << < dim3(ceil(iterGenSize / (float)block1.x), 1, 1), block1 >> >  (genSize
+			//		, WangHash(g_uCurFrameN), accumPathQueueSize, iterGenSize, g_devResultVarData, g_devKeyVarData, g_devTempPathQueue + accumPathQueueSize
+			//		, *g_fMinTraceProb.GetFloat(), maxMSE);
+			//	HANDLE_KERNEL_ERROR();
+			//	uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
+			//		, g_devTempPathQueue + accumPathQueueSize + iterGenSize, is_temppathqueue_terminated());
+			//	uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
+			//	pathQueuesSize.push_back(compactedGenSize);
+			//	accumPathQueueSize += compactedGenSize;
+			//	if (compactedGenSize == 0) break;
+			//	//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
+			//	//debugLoopTime++;
+			//}
 			//std::cout << "Debug Loop Time: " << debugLoopTime << "\n";
 
 			// fill temp path
@@ -1252,13 +1269,15 @@ void updateLightTriCudaMem(RTScene* scene)
 			if (unfilledPathQueueSize > 0)
 			{
 				pt_fillTempAdapPathQueue_kernel << < dim3(ceil((float)unfilledPathQueueSize / (float)block1.x), 1, 1), block1 >> > (g_devTempPathQueue + accumPathQueueSize, unfilledPathQueueSize);
-				pathQueuesSize.push_back(unfilledPathQueueSize);
+				HANDLE_KERNEL_ERROR();
+				//pathQueuesSize.push_back(unfilledPathQueueSize);
 				accumPathQueueSize += unfilledPathQueueSize;
 			}
 
 			// generate real path from temp path
 			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
+			HANDLE_KERNEL_ERROR();
 
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
@@ -1274,21 +1293,39 @@ void updateLightTriCudaMem(RTScene* scene)
 			//std::cout << "trace path: " << time << std::endl;
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
-			accumPathQueueSize = 0;
-			for (auto pathQueueSize : pathQueuesSize)
+			for (uint accumStart = 0; accumStart < genSize; accumStart += selectSize)
 			{
-				if (*g_enumDebugMode.GetUint() == 1)
-				{
-					pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
-				}
-				else
-				{
-					pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
-				}
-				accumPathQueueSize += pathQueueSize;
+				uint procSize = min(selectSize, genSize - accumStart);
+					if (*g_enumDebugMode.GetUint() == 1)
+					{
+						pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)procSize / (float)block1.x), 1, 1), block1 >> >
+							(g_devPathQueue + accumStart, procSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+						HANDLE_KERNEL_ERROR();
+					}
+					else
+					{
+						pt_applyPathQueueResult_kernel << < dim3(ceil((float)procSize / (float)block1.x), 1, 1), block1 >> >
+							(g_devPathQueue + accumStart, procSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+						HANDLE_KERNEL_ERROR();
+					}
 			}
+			//accumPathQueueSize = 0;
+			//for (auto pathQueueSize : pathQueuesSize)
+			//{
+			//	if (*g_enumDebugMode.GetUint() == 1)
+			//	{
+			//		pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
+			//			(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+			//		HANDLE_KERNEL_ERROR();
+			//	}
+			//	else
+			//	{
+			//		pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
+			//			(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+			//		HANDLE_KERNEL_ERROR();
+			//	}
+			//	accumPathQueueSize += pathQueueSize;
+			//}
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
@@ -1298,6 +1335,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (*g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
 		{
 			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
+			HANDLE_KERNEL_ERROR();
 		}
 
 		// Copy result to host

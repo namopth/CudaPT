@@ -1180,7 +1180,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
 			float meanMSE = sumMSE / (width * height);
-			//std::cout << "meanMSE: " << meanMSE << "\n";
+			std::cout << "maxMSE: " << maxMSE << "\n";
+			std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
 			//{
