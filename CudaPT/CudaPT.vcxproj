@@ -161,6 +161,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <ClInclude Include="..\include\bvhhelper.h" />
     <ClInclude Include="..\include\camhelper.h" />
     <ClInclude Include="..\include\conffilehelper.h" />
+    <ClInclude Include="..\include\cudaBilateralFilter.h" />
     <ClInclude Include="..\include\cudahelper.h" />
     <ClInclude Include="..\include\cudapt.h" />
     <ClInclude Include="..\include\cudaRTCommon.h" />
@@ -191,10 +192,11 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <None Include="..\shader\FinalComposeVS.glsl" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="..\src\cudaBilateralFilter.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTRegen.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu" />
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdap.cu" />
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilat.cu" />
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapPdf.cu" />
+    <CudaCompile Include="..\src\cudaRTBDPTStreamBilat.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheat.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheatSort.cu" />
     <CudaCompile Include="..\src\cudaRTPTStreamRegen.cu" />

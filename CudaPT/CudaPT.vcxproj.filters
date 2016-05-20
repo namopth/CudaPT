@@ -126,6 +126,9 @@
     <ClInclude Include="..\3rdparty\fann\include\fann_cascade.h">
       <Filter>3rdParty\FANN\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\cudaBilateralFilter.h">
+      <Filter>Cuda Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\geohelper.cpp">
@@ -195,16 +198,19 @@
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdap.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheat.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheatSort.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilat.cu">
+    <CudaCompile Include="..\src\cudaBilateralFilter.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamBilat.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapPdf.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
   </ItemGroup>

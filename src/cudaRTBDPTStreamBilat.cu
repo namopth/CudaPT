@@ -1,7 +1,15 @@
 #include "cudaRTCommon.h"
 
+#include <thrust/reduce.h>
 #include <thrust/remove.h>
 #include <thrust/execution_policy.h>
+
+#include "conffilehelper.h"
+
+#include "cudaBilateralFilter.h"
+
+#define FANN_NO_DLL
+#include "floatfann.h"
 
 #define BLOCK_SIZE 16
 #define NORMALRAY_BOUND_MAX 5
@@ -10,22 +18,32 @@
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
 
-namespace cudaRTBDPTStreamAdap
+namespace cudaRTBDPTStreamBilat
 {
-	const char* g_enumAdapModeName[] = {"PDF", "Const"};
+	const char* g_enumAdapModeName[] = { "PDF", "Const" };
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
-	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.2f);
+	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
+	NPAttrHelper::Attrib g_fBFilterEuDelta("Filter Euclidean Delta", 0.1f);
+	NPAttrHelper::Attrib g_uiBFilterRadius("Filter Radius", 5u);
+	NPAttrHelper::Attrib g_uiBFilterIter("Filter Iteration", 1u);
 
-	CUDA_RT_COMMON_ATTRIBS_N(4)
+	CUDA_RT_COMMON_ATTRIBS_N(3)
 	CUDA_RT_COMMON_ATTRIBS_BGN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+	//CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
+	//CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
+	//CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
+	//CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Filter Euclidean Delta, g_fBFilterEuDelta)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Filter Radius, g_uiBFilterRadius)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Filter Iteration, g_uiBFilterIter)
 	CUDA_RT_COMMON_ATTRIBS_END
+
+	uint g_uiFilterResultInd = 0;
+	float* g_devFilteredResult[2] = { nullptr, nullptr };
+	float* g_devFilterGaussianConst = nullptr;
 
 	struct LightVertex
 	{
@@ -68,27 +86,27 @@ namespace cudaRTBDPTStreamAdap
 		HANDLE_ERROR(cudaMemset((void*)g_devLightVertices, 0, sizeof(LightVertex) * LIGHTVERTEX_N));
 	}
 
-void updateLightTriCudaMem(RTScene* scene)
-{
-	g_lightTriN = 0;
-	CUFREE(g_devLightTri);
-	std::vector<uint> lightTri;
-	for (uint i = 0; i < scene->m_pTriangles.size(); i++)
+	void updateLightTriCudaMem(RTScene* scene)
 	{
-		if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
-			lightTri.push_back(i);
-	}
-	uint* tempLightTri = new uint[lightTri.size()];
-	for (uint i = 0; i < lightTri.size(); i++)
-	{
-		tempLightTri[i] = lightTri[i];
-	}
-	g_lightTriN = lightTri.size();
-	HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
-	HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
+		g_lightTriN = 0;
+		CUFREE(g_devLightTri);
+		std::vector<uint> lightTri;
+		for (uint i = 0; i < scene->m_pTriangles.size(); i++)
+		{
+			if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
+				lightTri.push_back(i);
+		}
+		uint* tempLightTri = new uint[lightTri.size()];
+		for (uint i = 0; i < lightTri.size(); i++)
+		{
+			tempLightTri[i] = lightTri[i];
+		}
+		g_lightTriN = lightTri.size();
+		HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
+		HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
 
-	DEL_ARRAY(tempLightTri);
-}
+		DEL_ARRAY(tempLightTri);
+	}
 
 	enum RAYTYPE
 	{
@@ -128,7 +146,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		__device__ PTPathVertex()
 			: isTerminated(true)
-			, pathPixel(make_uint2(0,0))
+			, pathPixel(make_uint2(0, 0))
 			, pathOutDir(make_float3(0.f, 1.f, 0.f))
 			, pathVertexPos(make_float3(0.f, 0.f, 0.f))
 			, pathOutMulTerm(make_float3(1.f, 1.f, 1.f))
@@ -211,6 +229,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
 	float* g_devResultVarData = nullptr;
+	float* g_devConvergedData = nullptr;
 	uint* g_devSampleResultN = nullptr;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
@@ -556,7 +575,7 @@ void updateLightTriCudaMem(RTScene* scene)
 					}
 				}
 
-				procVertex->pathSample = procVertex->pathSample + vecMul(emissive , procVertex->pathOutMulTerm);
+				procVertex->pathSample = procVertex->pathSample + vecMul(emissive, procVertex->pathOutMulTerm);
 
 				procVertex->origDiff = diff;
 				procVertex->pathInDir = -1 * ray.dir;
@@ -694,7 +713,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		float3 dir = normalize(camRight * au + camUp * av + camDir);
 
-		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
+		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
 	__global__ void pt_fillTempAdapPathQueue_kernel(uint* pathQueue, uint fillSize)
@@ -707,7 +726,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	}
 
 	__global__ void pt_genTempAdapPathQueue_kernel(float width, float height, uint32 hashedFrameN, uint32 seedoffset
-		, float* genChance, uint* pathQueue, float minProb = 0.f)
+		, float* genChance, uint* pathQueue, float minProb = 0.f, float mulRand = 1.f)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -721,7 +740,8 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		pathQueue[ind] = x + y * width;
 
-		if (curand_uniform(&randstate) > fmaxf(genChance[ind], minProb))
+		//float modChance = 1.f - expf(-genChance[ind]);
+		if (curand_uniform(&randstate)*mulRand > fmaxf(genChance[ind], minProb))
 		{
 			pathQueue[ind] = 0 - 1;
 		}
@@ -878,7 +898,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			}
 			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
 
-			float3 sampleResult = make_float3(1.f,1.f,1.f);
+			float3 sampleResult = make_float3(1.f, 1.f, 1.f);
 			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
 			float resultInf = 1.f / (float)(tempNextSampleResultN);
 			float oldInf = sampleResultN[ind] * resultInf;
@@ -929,15 +949,31 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
+
+	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint dataSize)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+		if (x >= dataSize)
+			return;
+		resultData[x] = fminf(((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
+			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
+			) / 3.f, 1.f);
+	}
+
 	void CleanMem()
 	{
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
+		CUFREE(g_devConvergedData);
 		CUFREE(g_devSampleResultN);
 		CUFREE(g_devResultVarData);
+		CUFREE(g_devFilteredResult[0]);
+		CUFREE(g_devFilteredResult[1]);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
+		CUFREE(g_devFilterGaussianConst);
 	}
 
 	//struct ray_greater_compare
@@ -954,7 +990,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	{
 		__hd__ bool operator()(const uint& vert)
 		{
-			return (vert+1 == 0);
+			return (vert + 1 == 0);
 		}
 	};
 
@@ -1040,7 +1076,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			size_t mem_tot;
 			size_t mem_free;
 			cudaMemGetInfo(&mem_free, &mem_tot);
-			std::cout << "Memory Used : " << mem_tot-mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
+			std::cout << "Memory Used : " << mem_tot - mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
 		}
 		else if (scene->GetIsCudaMaterialDirty())
 		{
@@ -1052,17 +1088,25 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height))
+		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devConvergedData || !g_devFilteredResult[0] || !g_devFilteredResult[1] || !g_devFilterGaussianConst)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devFilteredResult[0]);
+			cudaMalloc((void**)&g_devFilteredResult[0], g_resultDataSize);
+			CUFREE(g_devFilteredResult[1]);
+			cudaMalloc((void**)&g_devFilteredResult[1], g_resultDataSize);
 			CUFREE(g_devResultVarData);
 			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
 			CUFREE(g_devSampleResultN);
 			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
+			CUFREE(g_devConvergedData);
+			cudaMalloc((void**)&g_devConvergedData, g_resultDataSize);
+			CUFREE(g_devFilterGaussianConst);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devFilterGaussianConst, sizeof(float) * GAUSSIANCOST_N));
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1107,8 +1151,9 @@ void updateLightTriCudaMem(RTScene* scene)
 			//std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
 		}
 
-		if (g_uCurFrameN == 0)
+		if (true)
 		{
+			cudaMemcpy(g_devConvergedData, g_devFilteredResult[g_uiFilterResultInd], sizeof(float) * 3 * (uint)width * (uint)height, cudaMemcpyHostToDevice);
 			//float time;
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
@@ -1141,12 +1186,35 @@ void updateLightTriCudaMem(RTScene* scene)
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
 			//std::cout << "accum path: " << time << std::endl;
 		}
-		else
+		else if (false)
 		{
 			//float time;
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
 			//HANDLE_ERROR(cudaEventCreate(&stop));
+
+			// calculate sampling map from converged result
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devFilteredResult[g_uiFilterResultInd], g_devResultData, g_devResultVarData, (uint)(width * height));
+			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
+			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
+			float meanMSE = sumMSE / (width * height);
+			std::cout << "maxMSE: " << maxMSE << "\n";
+			std::cout << "meanMSE: " << meanMSE << "\n";
+
+			//if (g_uCurFrameN == 1)
+			//{
+			//	float* tempDiffData = new float[(uint)width * (uint)height];
+			//	cudaMemcpy(tempDiffData, g_devResultVarData, (uint)(width * height) * sizeof(float), cudaMemcpyDeviceToHost);
+			//	NPConfFileHelper::txtConfFile conf("adapCheat_diffData.txt");
+			//	for (uint j = 0; j < width * height; j++)
+			//	{
+			//		conf.WriteRaw<float>(tempDiffData[j]);
+			//		conf.WriteRaw("\n");
+			//	}
+			//	conf.SyncDataToFile();
+			//	DELETE_ARRAY(tempDiffData);
+			//}
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			// gen adaptive eye paths
@@ -1159,7 +1227,7 @@ void updateLightTriCudaMem(RTScene* scene)
 				// generate path into temp path
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
 					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat());
+					, *g_fMinTraceProb.GetFloat(), maxMSE);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
@@ -1181,7 +1249,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			}
 
 			// generate real path from temp path
-			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize / (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
 
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
@@ -1224,8 +1292,19 @@ void updateLightTriCudaMem(RTScene* scene)
 			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
 		}
 
+		cudaBilateralFilter::updateGaussian(g_devFilterGaussianConst, *(g_fBFilterEuDelta.GetFloat()), *(g_uiBFilterRadius.GetUint()));
+		cudaBilateralFilter::bilaterial_kernel << < renderGrid, block2 >> >(g_devResultData, width, height, *g_fBFilterEuDelta.GetFloat(), *g_uiBFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult[g_uiFilterResultInd]);
+		for (uint i = 1; i < *g_uiBFilterIter.GetUint(); i++)
+		{
+			cudaBilateralFilter::bilaterial_kernel << < renderGrid, block2 >> >(g_devFilteredResult[g_uiFilterResultInd], width, height, *g_fBFilterEuDelta.GetFloat(), *g_uiBFilterRadius.GetUint(), g_devFilterGaussianConst
+				, g_devFilteredResult[g_uiFilterResultInd ^ 1]);
+			g_uiFilterResultInd ^= 1;
+		}
+		HANDLE_KERNEL_ERROR();
+
 		// Copy result to host
-		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		//cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		cudaMemcpy(result, g_devFilteredResult[g_uiFilterResultInd], g_resultDataSize, cudaMemcpyDeviceToHost);
 		return true;
 	}
 }
