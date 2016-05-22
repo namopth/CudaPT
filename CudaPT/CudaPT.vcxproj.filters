@@ -213,5 +213,14 @@
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapPdf.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilat.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapEmp.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatSort.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

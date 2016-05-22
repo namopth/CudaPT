@@ -18,42 +18,18 @@
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
 
-namespace cudaRTBDPTStreamBilat
+namespace cudaRTBDPTStreamAdapBilatSort
 {
-	const char* g_enumAdapModeName[] = { "PDF", "Const" };
-	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
-	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
+	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("DesiredMaxAdaptiveSampling", 5);
 	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
-	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit", "Direct", "Position", "Normal", "Non-Filter" };
-	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 8, 0);
-	NPAttrHelper::Attrib g_fBFilterColorEuDelta("Filter Color E Delta", 1.f);
-	NPAttrHelper::Attrib g_fBFilterPosEuDelta("Filter Pos E Delta", 1.f);
-	NPAttrHelper::Attrib g_fBFilterNormEuDelta("Filter Norm E Delta", 1.f);
-	NPAttrHelper::Attrib g_fBFilterEmitEuDelta("Filter Emit E Delta", 0.5f);
-	NPAttrHelper::Attrib g_fBFilterDiffEuDelta("Filter Diff E Delta", 0.5f);
-	NPAttrHelper::Attrib g_uiBFilterRadius("Filter Radius", 5u);
-	NPAttrHelper::Attrib g_uiBFilterIter("Filter Iteration", 1u);
-	NPAttrHelper::Attrib g_uiRenderIter("Render Iteration", 5u);
+	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit", "Filtered Result" };
+	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 5, 0);
 
-	CUDA_RT_COMMON_ATTRIBS_N(9)
+	CUDA_RT_COMMON_ATTRIBS_N(2)
 	CUDA_RT_COMMON_ATTRIBS_BGN
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Filter Color E Delta, g_fBFilterColorEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Filter Pos E Delta, g_fBFilterPosEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Filter Norm E Delta, g_fBFilterNormEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Filter Emit E Delta, g_fBFilterEmitEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Diff E Delta, g_fBFilterDiffEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Radius, g_uiBFilterRadius)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Iteration, g_uiBFilterIter)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(7, Debug Mode, g_enumDebugMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(8, Render Iteration, g_uiRenderIter)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
-
-	uint g_uiFilterResultInd = 0;
-	float* g_devFilteredResult[2] = { nullptr, nullptr };
-	float* g_devFilterGaussianConst = nullptr;
 
 	struct LightVertex
 	{
@@ -96,27 +72,27 @@ namespace cudaRTBDPTStreamBilat
 		HANDLE_ERROR(cudaMemset((void*)g_devLightVertices, 0, sizeof(LightVertex) * LIGHTVERTEX_N));
 	}
 
-	void updateLightTriCudaMem(RTScene* scene)
+void updateLightTriCudaMem(RTScene* scene)
+{
+	g_lightTriN = 0;
+	CUFREE(g_devLightTri);
+	std::vector<uint> lightTri;
+	for (uint i = 0; i < scene->m_pTriangles.size(); i++)
 	{
-		g_lightTriN = 0;
-		CUFREE(g_devLightTri);
-		std::vector<uint> lightTri;
-		for (uint i = 0; i < scene->m_pTriangles.size(); i++)
-		{
-			if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
-				lightTri.push_back(i);
-		}
-		uint* tempLightTri = new uint[lightTri.size()];
-		for (uint i = 0; i < lightTri.size(); i++)
-		{
-			tempLightTri[i] = lightTri[i];
-		}
-		g_lightTriN = lightTri.size();
-		HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
-		HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
-
-		DEL_ARRAY(tempLightTri);
+		if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
+			lightTri.push_back(i);
 	}
+	uint* tempLightTri = new uint[lightTri.size()];
+	for (uint i = 0; i < lightTri.size(); i++)
+	{
+		tempLightTri[i] = lightTri[i];
+	}
+	g_lightTriN = lightTri.size();
+	HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
+	HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
+
+	DEL_ARRAY(tempLightTri);
+}
 
 	enum RAYTYPE
 	{
@@ -155,15 +131,13 @@ namespace cudaRTBDPTStreamBilat
 		float pathAccumPotential;
 
 		// for filtering
-		float3 pathDirectSample;
 		float3 pathDirectPos;
 		float3 pathDirectNorm;
-		float3 pathDirectEmissive;
 		float3 pathDirectDiffuse;
 
 		__device__ PTPathVertex()
 			: isTerminated(true)
-			, pathPixel(make_uint2(0, 0))
+			, pathPixel(make_uint2(0,0))
 			, pathOutDir(make_float3(0.f, 1.f, 0.f))
 			, pathVertexPos(make_float3(0.f, 0.f, 0.f))
 			, pathOutMulTerm(make_float3(1.f, 1.f, 1.f))
@@ -183,10 +157,8 @@ namespace cudaRTBDPTStreamBilat
 			, origTrans(0.f)
 			, pathPotential(1.f)
 			, pathAccumPotential(0.f)
-			, pathDirectSample(make_float3(0.f, 0.f, 0.f))
 			, pathDirectPos(make_float3(0.f, 0.f, 0.f))
 			, pathDirectNorm(make_float3(0.f, 0.f, 0.f))
-			, pathDirectEmissive(make_float3(0.f, 0.f, 0.f))
 			, pathDirectDiffuse(make_float3(0.f, 0.f, 0.f))
 		{}
 
@@ -212,10 +184,8 @@ namespace cudaRTBDPTStreamBilat
 			, origTrans(0.f)
 			, pathPotential(1.f)
 			, pathAccumPotential(0.f)
-			, pathDirectSample(make_float3(0.f, 0.f, 0.f))
 			, pathDirectPos(make_float3(0.f, 0.f, 0.f))
 			, pathDirectNorm(make_float3(0.f, 0.f, 0.f))
-			, pathDirectEmissive(make_float3(0.f, 0.f, 0.f))
 			, pathDirectDiffuse(make_float3(0.f, 0.f, 0.f))
 		{}
 	};
@@ -254,15 +224,22 @@ namespace cudaRTBDPTStreamBilat
 	}
 
 	float* g_devResultData = nullptr;
-	float* g_devDirectResultData = nullptr;
 	float* g_devAccResultData = nullptr;
-	float* g_devResultVarData = nullptr;
-	float* g_devConvergedData = nullptr;
+	float* g_devResultVarKeyData = nullptr;
+	uint* g_devPixelVarData = nullptr;
 	uint* g_devSampleResultN = nullptr;
+
 	float* g_devPositionData = nullptr;
 	float* g_devNormalData = nullptr;
-	float* g_devEmissiveData = nullptr;
 	float* g_devDiffuseData = nullptr;
+
+	float* g_devFilteredResult = nullptr;
+	float* g_devFilterGaussianConst = nullptr;
+	const float g_fFilterColorEuD = 15.f;
+	const float g_fFilterPosEuD = 1.f;
+	const float g_fFilterNormEuD = 0.5f;
+	const float g_fFilterDiffEuD = 0.5f;
+	const uint g_uiFilterRadius = 15;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -608,7 +585,7 @@ namespace cudaRTBDPTStreamBilat
 					}
 				}
 
-				procVertex->pathSample = procVertex->pathSample + vecMul(emissive, procVertex->pathOutMulTerm);
+				procVertex->pathSample = procVertex->pathSample + vecMul(emissive , procVertex->pathOutMulTerm);
 
 				procVertex->origDiff = diff;
 				procVertex->pathInDir = -1 * ray.dir;
@@ -620,16 +597,11 @@ namespace cudaRTBDPTStreamBilat
 				procVertex->pathInMulTerm = procVertex->pathOutMulTerm;
 				procVertex->pathPotential *= pdf;
 
-				if (procVertex->pathSampleDepth < 2)
+				if (procVertex->pathSampleDepth == 0)
 				{
-					procVertex->pathDirectSample = procVertex->pathDirectSample + procVertex->pathSample;
-					if (procVertex->pathSampleDepth == 0)
-					{
-						procVertex->pathDirectPos = triPos;
-						procVertex->pathDirectNorm = nl;
-						procVertex->pathDirectEmissive = emissive;
-						procVertex->pathDirectDiffuse = diff;
-					}
+					procVertex->pathDirectPos = triPos;
+					procVertex->pathDirectNorm = nl;
+					procVertex->pathDirectDiffuse = diff;
 				}
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
@@ -758,7 +730,7 @@ namespace cudaRTBDPTStreamBilat
 
 		float3 dir = normalize(camRight * au + camUp * av + camDir);
 
-		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
+		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
 	__global__ void pt_fillTempAdapPathQueue_kernel(uint* pathQueue, uint fillSize)
@@ -790,6 +762,28 @@ namespace cudaRTBDPTStreamBilat
 		{
 			pathQueue[ind] = 0 - 1;
 		}
+	}
+
+	__global__ void pt_genTempAdapPathQueueByKey_kernel(uint size, uint32 hashedFrameN, uint32 seedoffset,
+		uint genSize, float* genChance, uint* genChancePixel, uint* pathQueue)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (x >= size) return;
+
+		uint genInd = size - 1 - x % genSize;
+
+		//curandState randstate;
+		//curand_init(hashedFrameN + x + seedoffset, 0, 0, &randstate);
+
+		uint ind = genChancePixel[genInd];
+		pathQueue[x] = ind;
+
+		//float modChance = 1.f - expf(-genChance[ind]);
+		//if (curand_uniform(&randstate)*mulRand > fmaxf(genChance[ind], minProb))
+		//{
+		//	pathQueue[x] = 0 - 1;
+		//}
 	}
 
 	__global__ void pt_convTempPathQueue_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
@@ -889,18 +883,9 @@ namespace cudaRTBDPTStreamBilat
 
 		if (length(lightContribFromLightVertex) > 0.f)
 		{
-			float3 lightResult = vecMul(lightContribFromLightVertex, eyePath->pathInMulTerm);
-			eyePath->pathAccumSample = eyePath->pathAccumSample + lightResult;
+			eyePath->pathAccumSample = eyePath->pathAccumSample + vecMul(lightContribFromLightVertex, eyePath->pathInMulTerm);
 			eyePath->pathSampleN += 4;
 			eyePath->pathPotential *= lightPathPotential;
-
-			if (eyePath->pathSampleDepth <= 1)
-			{
-				if (eyePath->pathDirectSample.x > 0 || eyePath->pathDirectSample.y > 0 || eyePath->pathDirectSample.z > 0)
-					eyePath->pathDirectSample = (eyePath->pathDirectSample + lightResult)/5.f;
-				else
-					eyePath->pathDirectSample = lightResult/4.f;
-			}
 		}
 	}
 
@@ -929,17 +914,6 @@ namespace cudaRTBDPTStreamBilat
 		result[ind * 3] = result[ind * 3 + 1] = result[ind * 3 + 2] = fmaxf(minProb, varResult[ind]);
 	}
 
-	__global__ void pt_combineResult_kernel(uint width, uint height, float* resultA, float* resultB, float* outResult)
-	{
-		uint x = blockIdx.x * blockDim.x + threadIdx.x;
-		uint y = blockIdx.y * blockDim.y + threadIdx.y;
-		if (x >= width || y >= height) return;
-		uint ind = (y * width + x);
-		outResult[ind * 3] = resultA[ind * 3] + resultB[ind * 3];
-		outResult[ind * 3 + 1] = resultA[ind * 3 + 1] + resultB[ind * 3 + 1];
-		outResult[ind * 3 + 2] = resultA[ind * 3 + 2] + resultB[ind * 3 + 2];
-	}
-
 	__global__ void pt_debugTracedPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, float* varResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -963,7 +937,7 @@ namespace cudaRTBDPTStreamBilat
 			}
 			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
 
-			float3 sampleResult = make_float3(1.f, 1.f, 1.f);
+			float3 sampleResult = make_float3(1.f,1.f,1.f);
 			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
 			float resultInf = 1.f / (float)(tempNextSampleResultN);
 			float oldInf = sampleResultN[ind] * resultInf;
@@ -977,7 +951,7 @@ namespace cudaRTBDPTStreamBilat
 	}
 
 	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult
-		, float* varResult, float* directResult, float* posResult, float* normResult, float* emitResult, float* diffResult, uint* sampleResultN)
+		, float* varResult, float* posResult, float* normResult, float* diffResult, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -1012,11 +986,6 @@ namespace cudaRTBDPTStreamBilat
 				varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
 				sampleResultN[ind] = tempNextSampleResultN;
 
-				sampleResult = pathQueue[x].pathDirectSample;
-				directResult[ind * 3] = resultInf * sampleResult.x + oldInf * directResult[ind * 3];
-				directResult[ind * 3 + 1] = resultInf * sampleResult.y + oldInf * directResult[ind * 3 + 1];
-				directResult[ind * 3 + 2] = resultInf * sampleResult.z + oldInf * directResult[ind * 3 + 2];
-
 				sampleResult = pathQueue[x].pathDirectPos;
 				posResult[ind * 3] = sampleResult.x;
 				posResult[ind * 3 + 1] = sampleResult.y;
@@ -1027,11 +996,6 @@ namespace cudaRTBDPTStreamBilat
 				normResult[ind * 3 + 1] = sampleResult.y;
 				normResult[ind * 3 + 2] = sampleResult.z;
 
-				sampleResult = pathQueue[x].pathDirectEmissive;
-				emitResult[ind * 3] = sampleResult.x;
-				emitResult[ind * 3 + 1] = sampleResult.y;
-				emitResult[ind * 3 + 2] = sampleResult.z;
-
 				sampleResult = pathQueue[x].pathDirectDiffuse;
 				diffResult[ind * 3] = sampleResult.x;
 				diffResult[ind * 3 + 1] = sampleResult.y;
@@ -1041,15 +1005,20 @@ namespace cudaRTBDPTStreamBilat
 	}
 
 
-	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint dataSize)
+	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, uint* sampleNData, uint sampleN, float* resultData, uint* resultPixel, uint dataSize)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dataSize)
 			return;
-		resultData[x] = fminf(((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+		uint sampledN = sampleNData[x];
+		float reductionFactor = (float)sampledN / (float)(sampleN + sampledN);
+		if (sampleN + sampledN < sampledN)
+			reductionFactor = 0;
+		resultData[x] = /*fminf(*/reductionFactor * ((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
 			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
 			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
-			) / 3.f, 1.f);
+			) / 3.f/*, 1.f)*/;
+		resultPixel[x] = x;
 	}
 
 	void CleanMem()
@@ -1057,18 +1026,15 @@ namespace cudaRTBDPTStreamBilat
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
-		CUFREE(g_devConvergedData);
 		CUFREE(g_devSampleResultN);
-		CUFREE(g_devDirectResultData);
-		CUFREE(g_devResultVarData);
-		CUFREE(g_devFilteredResult[0]);
-		CUFREE(g_devFilteredResult[1]);
+		CUFREE(g_devResultVarKeyData);
+		CUFREE(g_devPixelVarData);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
+		CUFREE(g_devFilteredResult);
 		CUFREE(g_devFilterGaussianConst);
 		CUFREE(g_devPositionData);
 		CUFREE(g_devNormalData);
-		CUFREE(g_devEmissiveData);
 		CUFREE(g_devDiffuseData);
 	}
 
@@ -1086,7 +1052,7 @@ namespace cudaRTBDPTStreamBilat
 	{
 		__hd__ bool operator()(const uint& vert)
 		{
-			return (vert + 1 == 0);
+			return (vert+1 == 0);
 		}
 	};
 
@@ -1169,10 +1135,10 @@ namespace cudaRTBDPTStreamBilat
 			allocateLightPathMem();
 			updateLightTriCudaMem(scene);
 
-			//size_t mem_tot;
-			//size_t mem_free;
-			//cudaMemGetInfo(&mem_free, &mem_tot);
-			//std::cout << "Memory Used : " << mem_tot - mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
+			size_t mem_tot;
+			size_t mem_free;
+			cudaMemGetInfo(&mem_free, &mem_tot);
+			std::cout << "Memory Used : " << mem_tot-mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
 		}
 		else if (scene->GetIsCudaMaterialDirty())
 		{
@@ -1184,9 +1150,8 @@ namespace cudaRTBDPTStreamBilat
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) 
-			|| !g_devConvergedData || !g_devFilteredResult[0] || !g_devFilteredResult[1] || !g_devFilterGaussianConst 
-			|| !g_devPositionData || !g_devNormalData || !g_devDirectResultData)
+		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devFilteredResult 
+			|| !g_devPositionData || !g_devNormalData || !g_devDiffuseData || !g_devResultVarKeyData || !g_devPixelVarData || !g_devSampleResultN)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
@@ -1197,29 +1162,23 @@ namespace cudaRTBDPTStreamBilat
 			cudaMalloc((void**)&g_devPositionData, g_resultDataSize);
 			CUFREE(g_devNormalData);
 			cudaMalloc((void**)&g_devNormalData, g_resultDataSize);
-			CUFREE(g_devEmissiveData);
-			cudaMalloc((void**)&g_devEmissiveData, g_resultDataSize);
 			CUFREE(g_devDiffuseData);
 			cudaMalloc((void**)&g_devDiffuseData, g_resultDataSize);
-			CUFREE(g_devDirectResultData);
-			cudaMalloc((void**)&g_devDirectResultData, g_resultDataSize);
-			CUFREE(g_devFilteredResult[0]);
-			cudaMalloc((void**)&g_devFilteredResult[0], g_resultDataSize);
-			CUFREE(g_devFilteredResult[1]);
-			cudaMalloc((void**)&g_devFilteredResult[1], g_resultDataSize);
-			CUFREE(g_devResultVarData);
-			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
+			CUFREE(g_devResultVarKeyData);
+			cudaMalloc((void**)&g_devResultVarKeyData, sizeof(float) * width * height);
+			CUFREE(g_devPixelVarData);
+			HANDLE_ERROR(cudaMalloc((void**)&g_devPixelVarData, sizeof(uint) * width * height));
 			CUFREE(g_devSampleResultN);
 			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
-			CUFREE(g_devConvergedData);
-			cudaMalloc((void**)&g_devConvergedData, g_resultDataSize);
-			CUFREE(g_devFilterGaussianConst);
-			HANDLE_ERROR(cudaMalloc((void**)&g_devFilterGaussianConst, sizeof(float) * GAUSSIANCOST_N));
+			CUFREE(g_devFilteredResult);
+			cudaMalloc((void**)&g_devFilteredResult, g_resultDataSize);
+		}
 
-			size_t mem_tot;
-			size_t mem_free;
-			cudaMemGetInfo(&mem_free, &mem_tot);
-			std::cout << "Memory Used : " << mem_tot - mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
+		if (!g_devFilterGaussianConst)
+		{
+			CUFREE(g_devFilterGaussianConst);
+			cudaMalloc((void**)&g_devFilterGaussianConst, sizeof(uint) * GAUSSIANCOST_N);
+			cudaBilateralFilter::updateGaussian(g_devFilterGaussianConst, g_fFilterColorEuD, g_uiFilterRadius);
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1264,9 +1223,8 @@ namespace cudaRTBDPTStreamBilat
 			//std::cout << "Generated light vertices size: " << g_uLightVerticesSize << std::endl;
 		}
 
-		if (*g_uiRenderIter.GetUint() == 0 || g_uCurFrameN < *g_uiRenderIter.GetUint())
+		if (g_uCurFrameN < 5)
 		{
-			cudaMemcpy(g_devConvergedData, g_devFilteredResult[g_uiFilterResultInd], sizeof(float) * 3 * (uint)width * (uint)height, cudaMemcpyHostToDevice);
 			//float time;
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
@@ -1293,33 +1251,39 @@ namespace cudaRTBDPTStreamBilat
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
-				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData
-				, g_devDirectResultData, g_devPositionData, g_devNormalData, g_devEmissiveData, g_devDiffuseData, g_devSampleResultN);
+				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarKeyData, g_devPositionData, g_devNormalData, g_devDiffuseData, g_devSampleResultN);
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
 			//std::cout << "accum path: " << time << std::endl;
 		}
-		else if (false)
+		else
 		{
 			//float time;
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
 			//HANDLE_ERROR(cudaEventCreate(&stop));
+			//cudaBilateralFilter::bilaterial_posnormemit_kernel << < renderGrid, block2 >> >(g_devResultData, g_devPositionData, g_devNormalData, g_devDiffuseData,
+			//	width, height, g_fFilterColorEuD, g_fFilterPosEuD, g_fFilterNormEuD, g_fFilterDiffEuD, g_uiFilterRadius, g_devFilterGaussianConst, g_devFilteredResult);
+			cudaBilateralFilter::bilaterial_posnorm_kernel << < renderGrid, block2 >> >(g_devResultData, g_devPositionData, g_devNormalData,
+				width, height, g_fFilterColorEuD, g_fFilterPosEuD, g_fFilterNormEuD, g_uiFilterRadius, g_devFilterGaussianConst, g_devFilteredResult);
 
 			// calculate sampling map from converged result
-			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devFilteredResult[g_uiFilterResultInd], g_devResultData, g_devResultVarData, (uint)(width * height));
-			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
-			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
-			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
-			float meanMSE = sumMSE / (width * height);
-			std::cout << "maxMSE: " << maxMSE << "\n";
-			std::cout << "meanMSE: " << meanMSE << "\n";
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > 
+				(g_devFilteredResult, g_devResultData, g_devSampleResultN, (*g_uiDesiredMaxAdaptiveSampling.GetUint()), g_devResultVarKeyData, g_devPixelVarData, (uint)(width * height));
+
+			thrust::sort_by_key(thrust::device, g_devResultVarKeyData, g_devResultVarKeyData + (uint)(width * height), g_devPixelVarData);
+
+			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarKeyData, g_devResultVarKeyData + (uint)(width * height), 0.f, thrust::plus<float>());
+			//float maxMSE = thrust::reduce(thrust::device, g_devResultVarKeyData, g_devResultVarKeyData + (uint)(width * height), 0.f, thrust::maximum<float>());
+			//float meanMSE = sumMSE / (width * height);
+			//std::cout << "maxMSE: " << maxMSE << "\n";
+			//std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
 			//{
 			//	float* tempDiffData = new float[(uint)width * (uint)height];
-			//	cudaMemcpy(tempDiffData, g_devResultVarData, (uint)(width * height) * sizeof(float), cudaMemcpyDeviceToHost);
+			//	cudaMemcpy(tempDiffData, g_devResultVarKeyData, (uint)(width * height) * sizeof(float), cudaMemcpyDeviceToHost);
 			//	NPConfFileHelper::txtConfFile conf("adapCheat_diffData.txt");
 			//	for (uint j = 0; j < width * height; j++)
 			//	{
@@ -1333,38 +1297,18 @@ namespace cudaRTBDPTStreamBilat
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			// gen adaptive eye paths
 			std::vector<uint> pathQueuesSize;
-			uint accumPathQueueSize = 0;
-			uint genSize = width * height;
-			//uint debugLoopTime = 0;
-			while (accumPathQueueSize < genSize)
-			{
-				// generate path into temp path
-				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
-					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), maxMSE);
-				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
-					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
-				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
-				pathQueuesSize.push_back(compactedGenSize);
-				accumPathQueueSize += compactedGenSize;
-				if (compactedGenSize == 0) break;
-				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
-				//debugLoopTime++;
-			}
-			//std::cout << "Debug Loop Time: " << debugLoopTime << "\n";
-
-			// fill temp path
-			int unfilledPathQueueSize = genSize - accumPathQueueSize;
-			if (unfilledPathQueueSize > 0)
-			{
-				pt_fillTempAdapPathQueue_kernel << < dim3(ceil((float)unfilledPathQueueSize / (float)block1.x), 1, 1), block1 >> > (g_devTempPathQueue + accumPathQueueSize, unfilledPathQueueSize);
-				pathQueuesSize.push_back(unfilledPathQueueSize);
-				accumPathQueueSize += unfilledPathQueueSize;
-			}
+			uint genSize = width * height; 
+			uint selectSize = ceil((float)(width * height) / (float)(*g_uiDesiredMaxAdaptiveSampling.GetUint()));
+			pt_genTempAdapPathQueueByKey_kernel << < dim3(ceil(genSize / (float)block1.x), 1, 1), block1 >> >  (genSize
+				, WangHash(g_uCurFrameN), 0, selectSize, g_devResultVarKeyData, g_devPixelVarData, g_devTempPathQueue);
+			HANDLE_KERNEL_ERROR();
+			uint accumPathQueueSize = genSize;
 
 			// generate real path from temp path
-			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize / (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > 
+				(f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
+			HANDLE_KERNEL_ERROR();
 
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
@@ -1380,21 +1324,23 @@ namespace cudaRTBDPTStreamBilat
 			//std::cout << "trace path: " << time << std::endl;
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
-			accumPathQueueSize = 0;
-			for (auto pathQueueSize : pathQueuesSize)
+			for (uint accumStart = 0; accumStart < genSize; accumStart += selectSize)
 			{
+				uint procSize = min(selectSize, genSize - accumStart);
 				if (*g_enumDebugMode.GetUint() == 1)
 				{
-					pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
+					pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)procSize / (float)block1.x), 1, 1), block1 >> >
+						(g_devPathQueue + accumStart, procSize, width, height, g_uCurFrameN, g_devResultData
+						, g_devAccResultData, g_devResultVarKeyData, g_devSampleResultN);
+					HANDLE_KERNEL_ERROR();
 				}
 				else
 				{
-					pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData
-						, g_devDirectResultData, g_devPositionData, g_devNormalData, g_devEmissiveData, g_devDiffuseData, g_devSampleResultN);
+					pt_applyPathQueueResult_kernel << < dim3(ceil((float)procSize / (float)block1.x), 1, 1), block1 >> >
+						(g_devPathQueue + accumStart, procSize, width, height, g_uCurFrameN, g_devResultData
+						, g_devAccResultData, g_devResultVarKeyData, g_devPositionData, g_devNormalData, g_devDiffuseData, g_devSampleResultN);
+					HANDLE_KERNEL_ERROR();
 				}
-				accumPathQueueSize += pathQueueSize;
 			}
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
@@ -1404,47 +1350,19 @@ namespace cudaRTBDPTStreamBilat
 		}
 		if (*g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
 		{
-			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
+			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devFilteredResult, g_devResultVarKeyData
+				, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
+			HANDLE_KERNEL_ERROR();
 		}
-
-		cudaBilateralFilter::updateGaussian(g_devFilterGaussianConst, *(g_fBFilterColorEuDelta.GetFloat()), *(g_uiBFilterRadius.GetUint()));
-		//cudaBilateralFilter::bilaterial_kernel << < renderGrid, block2 >> >(g_devResultData, width, height, *g_fBFilterColorEuDelta.GetFloat()
-		//	, *g_uiBFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult[g_uiFilterResultInd]);
-		cudaBilateralFilter::bilaterial_posnormemit_kernel << < renderGrid, block2 >> >(g_devResultData, g_devPositionData, g_devNormalData, g_devDiffuseData
-			, width, height, *g_fBFilterColorEuDelta.GetFloat(), *g_fBFilterPosEuDelta.GetFloat(), *g_fBFilterNormEuDelta.GetFloat(), *g_fBFilterDiffEuDelta.GetFloat()
-			, *g_uiBFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult[g_uiFilterResultInd]);
-		for (uint i = 1; i < *g_uiBFilterIter.GetUint(); i++)
-		{
-			cudaBilateralFilter::bilaterial_posnormemit_kernel << < renderGrid, block2 >> >(g_devFilteredResult[g_uiFilterResultInd], g_devPositionData, g_devNormalData, g_devDiffuseData
-				, width, height, *g_fBFilterColorEuDelta.GetFloat(), *g_fBFilterPosEuDelta.GetFloat(), *g_fBFilterNormEuDelta.GetFloat(), *g_fBFilterDiffEuDelta.GetFloat()
-				, *g_uiBFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult[g_uiFilterResultInd ^ 1]);
-			g_uiFilterResultInd ^= 1;
-		}
-		HANDLE_KERNEL_ERROR();
-
-		//pt_combineResult_kernel << < renderGrid, block2 >> >(width, height, g_devFilteredResult[g_uiFilterResultInd], g_devDirectResultData, g_devFilteredResult[g_uiFilterResultInd]);
 
 		// Copy result to host
-		//cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
-		if (*g_enumDebugMode.GetUint() == 4)
+		if (*g_enumDebugMode.GetUint() == 4 || *g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
 		{
-			cudaMemcpy(result, g_devDirectResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
-		}
-		else if (*g_enumDebugMode.GetUint() == 5)
-		{
-			cudaMemcpy(result, g_devPositionData, g_resultDataSize, cudaMemcpyDeviceToHost);
-		}
-		else if (*g_enumDebugMode.GetUint() == 6)
-		{
-			cudaMemcpy(result, g_devNormalData, g_resultDataSize, cudaMemcpyDeviceToHost);
-		}
-		else if (*g_enumDebugMode.GetUint() == 7)
-		{
-			cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+			cudaMemcpy(result, g_devFilteredResult, g_resultDataSize, cudaMemcpyDeviceToHost);
 		}
 		else
 		{
-			cudaMemcpy(result, g_devFilteredResult[g_uiFilterResultInd], g_resultDataSize, cudaMemcpyDeviceToHost);
+			cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
 		}
 		return true;
 	}

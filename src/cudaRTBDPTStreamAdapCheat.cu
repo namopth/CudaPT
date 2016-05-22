@@ -1270,11 +1270,18 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 		if (*g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
 		{
-			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
+			pt_applyPixelProbToResult_kernel << < renderGrid, block2 >> >(width, height, g_devAccResultData, g_devResultVarData, (*g_enumDebugMode.GetUint() == 3) ? *g_fMinTraceProb.GetFloat() : 0.f);
 		}
 
 		// Copy result to host
-		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		if (*g_enumDebugMode.GetUint() == 2 || *g_enumDebugMode.GetUint() == 3)
+		{
+			cudaMemcpy(result, g_devAccResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		}
+		else
+		{
+			cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		}
 		return true;
 	}
 }
