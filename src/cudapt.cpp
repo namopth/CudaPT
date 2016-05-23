@@ -215,7 +215,7 @@ int CUDAPTWindow::OnInit()
 }
 
 #ifdef ADAPCHEAT
-namespace cudaRTBDPTStreamAdapCheat
+namespace cudaRTBDPTStreamAdapCheatBinary
 {
 	extern float* g_fConvergedResult;
 }
@@ -228,7 +228,7 @@ namespace cudaRTBDPTStreamAdapCheatSort
 int CUDAPTWindow::OnTick(const float deltaTime)
 {
 #ifdef ADAPCHEAT
-	cudaRTBDPTStreamAdapCheat::g_fConvergedResult = m_pCapturedConvergedResult;
+	cudaRTBDPTStreamAdapCheatBinary::g_fConvergedResult = m_pCapturedConvergedResult;
 	cudaRTBDPTStreamAdapCheatSort::g_fConvergedResult = m_pCapturedConvergedResult;
 #endif
 	//DEBUG_COUT("BRDFVisualizer::OnTick BGN");

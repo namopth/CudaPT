@@ -1,0 +1,9 @@
+Laptop
+Adap Bilateral Binary
+Desired 5
+Color 50
+Pos 1
+Norm 0.25
+Diff 0.1
+Rad 15
+60 Sec->0.0853713

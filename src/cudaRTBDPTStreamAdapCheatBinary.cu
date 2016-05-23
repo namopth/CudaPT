@@ -16,11 +16,11 @@
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
 
-namespace cudaRTBDPTStreamAdapCheat
+namespace cudaRTBDPTStreamAdapCheatBinary
 {
 	const char* g_enumAdapModeName[] = {"PDF", "Const"};
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
-	NPAttrHelper::Attrib g_uiDesiredMaxAdaptiveSampling("SpecifiedBVHDepth", 5);
+	NPAttrHelper::Attrib g_uiDesiredSamplingN("Desired Max Sampling", 5);
 	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 4, 0);
@@ -28,7 +28,7 @@ namespace cudaRTBDPTStreamAdapCheat
 	CUDA_RT_COMMON_ATTRIBS_N(4)
 	CUDA_RT_COMMON_ATTRIBS_BGN
 	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Sampling N, g_uiDesiredSamplingN)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
 	CUDA_RT_COMMON_ATTRIBS_END
@@ -945,10 +945,10 @@ void updateLightTriCudaMem(RTScene* scene)
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dataSize)
 			return;
-		resultData[x] = fminf(((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+		resultData[x] = ((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
 			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
 			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
-			) / 3.f, 1.f);
+			) / 3.f;
 	}
 
 	void CleanMem()
@@ -1053,6 +1053,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
+			CleanMem();
 			g_matLastCamMat = g_matCurCamMat;
 			g_uCurFrameN = 0;
 			initAllSceneCudaMem(scene);
@@ -1177,11 +1178,11 @@ void updateLightTriCudaMem(RTScene* scene)
 			// calculate sampling map from converged result
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devConvergedData, g_devResultData, g_devResultVarData, (uint)(width * height));
 			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
-			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
-			float meanMSE = sumMSE / (width * height);
-			std::cout << "maxMSE: " << maxMSE << "\n";
-			std::cout << "meanMSE: " << meanMSE << "\n";
+			//float meanMSE = sumMSE / (width * height);
+			//std::cout << "maxMSE: " << maxMSE << "\n";
+			//std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
 			//{
@@ -1203,18 +1204,25 @@ void updateLightTriCudaMem(RTScene* scene)
 			uint accumPathQueueSize = 0;
 			uint genSize = width * height;
 			//uint debugLoopTime = 0;
+			float leftWindow = 0.f;
+			float rightWindow = maxMSE;
+			float desiredGenSize = width * height / (float)*g_uiDesiredSamplingN.GetUint();
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
 					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), maxMSE);
+					, *g_fMinTraceProb.GetFloat(), rightWindow);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
 				pathQueuesSize.push_back(compactedGenSize);
 				accumPathQueueSize += compactedGenSize;
 				if (compactedGenSize == 0) break;
+				if (compactedGenSize < desiredGenSize)
+					rightWindow = (leftWindow + rightWindow) * 0.5f;
+				else if (compactedGenSize > desiredGenSize)
+					rightWindow = rightWindow + rightWindow * 2.f;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 				//debugLoopTime++;
 			}

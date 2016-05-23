@@ -108,6 +108,7 @@ namespace cudaRTDebug
 
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
+			CleanMem();
 			initAllSceneCudaMem(scene);
 		}
 		else if (scene->GetIsCudaMaterialDirty())

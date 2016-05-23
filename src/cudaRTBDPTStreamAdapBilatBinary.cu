@@ -1115,6 +1115,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		if (!g_bIsCudaInit || scene->GetIsCudaDirty())
 		{
+			CleanMem();
 			g_matLastCamMat = g_matCurCamMat;
 			g_uCurFrameN = 0;
 			initAllSceneCudaMem(scene);
