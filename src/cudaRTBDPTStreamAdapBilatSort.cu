@@ -1011,7 +1011,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (x >= dataSize)
 			return;
 		uint sampledN = sampleNData[x];
-		float reductionFactor = (float)sampledN / (float)(sampleN + sampledN);
+		float reductionFactor = (float)sampleN / (float)(sampleN + sampledN);
 		if (sampleN + sampledN < sampledN)
 			reductionFactor = 0;
 		resultData[x] = /*fminf(*/reductionFactor * ((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])

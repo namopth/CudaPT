@@ -72,6 +72,8 @@ protected:
 	NPMathHelper::Vec2 m_v2CurrentCursorPos;
 
 	// RMSE Comparison
+	uint32 m_uiRMSECaptureSPP;
+	uint32 m_uiRMSECurSPP;
 	bool m_bIsRMSECapturing;
 	float m_fRMSECaptureSecTime;
 	float m_fRMSECaptureElapSecTime;

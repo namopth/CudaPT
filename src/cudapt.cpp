@@ -118,6 +118,7 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_fFPS(0.f)
 	, m_bIsMLBClicked(false)
 	, m_pCapturedConvergedResult(nullptr)
+	, m_uiRMSECaptureSPP(0)
 {
 
 }
@@ -180,13 +181,15 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddButton(mainBar, "clearconvergedresult", TWClearConvergedResult, this, "label='Clear Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "showconvergedresult", TW_TYPE_BOOLCPP, &m_bIsShowCapturedConvergedResult, "label='Show Converged Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Valid' group='RMSE Experiment'"));
-	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'")); 
 
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsespp", TW_TYPE_UINT32, &m_uiRMSECaptureSPP, "label='RMSE Collect SPP' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWToggleCollectRMSE, this, "label='Begin/Cancel Collect RMSE' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "calcrmse", TWToggleCalculateRMSE, this, "label='Calculate RMSE Now' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "iscollectingrmse", TW_TYPE_BOOLCPP, &m_bIsRMSECapturing, " label='Is Collecting' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "collectingrmseelapsetime", TW_TYPE_FLOAT, &m_fRMSECaptureElapSecTime, "label='Elapse time' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "collectingcurrentssp", TW_TYPE_UINT32, &m_uiRMSECurSPP, "label='Current SPP' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "rmseresult", TW_TYPE_FLOAT, &m_fRMSEResult, "label='RMSE Result' group='RMSE Experiment'"));
 
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
@@ -242,9 +245,11 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 		}
 
 		m_fRMSECaptureElapSecTime += deltaTime;
-		if (m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
+		m_uiRMSECurSPP++;
+		if ((m_fRMSECaptureSecTime > 0 && m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
+			|| (m_uiRMSECaptureSPP > 0 && m_uiRMSECurSPP > m_uiRMSECaptureSPP))
 		{
-			std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " seconds.\n";
+			std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " sec " << --m_uiRMSECurSPP << " frame\n";
 			CalculateRMSE();
 			m_bIsRMSECapturing = false;
 			m_bIsTracing = false;
@@ -409,9 +414,9 @@ void CUDAPTWindow::BrowseAndSaveResult()
 					uint32 y = i / m_iSizeW;
 					uint32 x = i - y * m_iSizeW;
 					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x)*3;
-					data[i*3] = m_raytracer.GetResult()[ind] * 256;
-					data[i*3 + 1] = m_raytracer.GetResult()[ind + 1] * 256;
-					data[i*3 + 2] = m_raytracer.GetResult()[ind + 2] * 256;
+					data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f)) * 255;
+					data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f)) * 255;
+					data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f)) * 255;
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
@@ -640,9 +645,9 @@ void CUDAPTWindow::ExportConvergedResult()
 					uint32 y = i / m_iSizeW;
 					uint32 x = i - y * m_iSizeW;
 					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
-					data[i * 3] = m_pCapturedConvergedResult[ind] * 256;
-					data[i * 3 + 1] = m_pCapturedConvergedResult[ind + 1] * 256;
-					data[i * 3 + 2] = m_pCapturedConvergedResult[ind + 2] * 256;
+					data[i * 3] = fmaxf(0.f, fminf(m_pCapturedConvergedResult[ind], 1.0f)) * 255;
+					data[i * 3 + 1] = fmaxf(0.f, fminf(m_pCapturedConvergedResult[ind + 1], 1.0f)) * 255;
+					data[i * 3 + 2] = fmaxf(0.f, fminf(m_pCapturedConvergedResult[ind + 2], 1.0f)) * 255;
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
@@ -664,6 +669,7 @@ void CUDAPTWindow::ToggleCollectRMSE()
 		{
 			m_bIsRMSECapturing = true;
 			m_fRMSECaptureElapSecTime = 0.f;
+			m_uiRMSECurSPP = 0;
 		}
 		else
 		{

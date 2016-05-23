@@ -27,12 +27,25 @@ namespace cudaRTBDPTStreamAdapBilatBinary
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit", "Filtered Result" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 5, 0);
 
-	CUDA_RT_COMMON_ATTRIBS_N(4)
+	NPAttrHelper::Attrib g_fFilterColorEuD("Filter Color E Delta", 15.f);
+	NPAttrHelper::Attrib g_fFilterPosEuD("Filter Pos E Delta", 1.f);
+	NPAttrHelper::Attrib g_fFilterNormEuD("Filter Norm E Delta", 0.5f);
+	NPAttrHelper::Attrib g_fFilterDiffEuD("Filter Diff E Delta", 0.5f);
+	NPAttrHelper::Attrib g_uiFilterRadius("Filter Radius", 15);
+	NPAttrHelper::Attrib g_bFilterDiffuse("Filter Diff Flag", false);
+
+	CUDA_RT_COMMON_ATTRIBS_N(10)
 	CUDA_RT_COMMON_ATTRIBS_BGN
 	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredSamplingN)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
 	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Color EuD, g_fFilterColorEuD)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Pos EuD, g_fFilterPosEuD)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Norm EuD, g_fFilterNormEuD)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(7, Filter Diff EuD, g_fFilterDiffEuD)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(8, Filter Radius, g_uiFilterRadius)
+	CUDA_RT_COMMON_ATTRIB_DECLARE(9, Filter Diffuse Flag, g_bFilterDiffuse)
 	CUDA_RT_COMMON_ATTRIBS_END
 
 	struct LightVertex
@@ -238,11 +251,6 @@ void updateLightTriCudaMem(RTScene* scene)
 
 	float* g_devFilteredResult = nullptr;
 	float* g_devFilterGaussianConst = nullptr;
-	const float g_fFilterColorEuD = 15.f;
-	const float g_fFilterPosEuD = 1.f;
-	const float g_fFilterNormEuD = 0.5f;
-	const float g_fFilterDiffEuD = 0.5f;
-	const uint g_uiFilterRadius = 15;
 
 	NPMathHelper::Mat4x4 g_matLastCamMat;
 	NPMathHelper::Mat4x4 g_matCurCamMat;
@@ -986,15 +994,19 @@ void updateLightTriCudaMem(RTScene* scene)
 	}
 
 
-	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, float* resultData, uint dataSize)
+	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, uint* sampleNData, uint sampleN, float* resultData, uint dataSize)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= dataSize)
 			return;
-		resultData[x] = fminf(((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
+		uint sampledN = sampleNData[x];
+		float reductionFactor = (float)sampleN / (float)(sampleN + sampledN);
+		if (sampleN + sampledN < sampledN)
+			reductionFactor = 0;
+		resultData[x] = reductionFactor * ((correctData[x * 3] - sampleData[x * 3]) * (correctData[x * 3] - sampleData[x * 3])
 			+ (correctData[x * 3 + 1] - sampleData[x * 3 + 1]) * (correctData[x * 3 + 1] - sampleData[x * 3 + 1])
 			+ (correctData[x * 3 + 2] - sampleData[x * 3 + 2]) * (correctData[x * 3 + 2] - sampleData[x * 3 + 2])
-			) / 3.f, 1.f);
+			) / 3.f;
 	}
 
 	void CleanMem()
@@ -1150,7 +1162,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		{
 			CUFREE(g_devFilterGaussianConst);
 			cudaMalloc((void**)&g_devFilterGaussianConst, sizeof(uint) * GAUSSIANCOST_N);
-			cudaBilateralFilter::updateGaussian(g_devFilterGaussianConst, g_fFilterColorEuD, g_uiFilterRadius);
+			cudaBilateralFilter::updateGaussian(g_devFilterGaussianConst, *g_fFilterColorEuD.GetFloat(), *g_uiFilterRadius.GetUint());
 		}
 
 		float3 f3CamPos = V32F3(camPos);
@@ -1235,18 +1247,29 @@ void updateLightTriCudaMem(RTScene* scene)
 			//cudaEvent_t start, stop;
 			//HANDLE_ERROR(cudaEventCreate(&start));
 			//HANDLE_ERROR(cudaEventCreate(&stop));
-			//cudaBilateralFilter::bilaterial_posnormemit_kernel << < renderGrid, block2 >> >(g_devResultData, g_devPositionData, g_devNormalData, g_devDiffuseData,
-			//	width, height, g_fFilterColorEuD, g_fFilterPosEuD, g_fFilterNormEuD, g_fFilterDiffEuD, g_uiFilterRadius, g_devFilterGaussianConst, g_devFilteredResult);
-			cudaBilateralFilter::bilaterial_posnorm_kernel << < renderGrid, block2 >> >(g_devResultData, g_devPositionData, g_devNormalData,
-				width, height, g_fFilterColorEuD, g_fFilterPosEuD, g_fFilterNormEuD, g_uiFilterRadius, g_devFilterGaussianConst, g_devFilteredResult);
+			if (*g_bFilterDiffuse.GetBool())
+			{
+				cudaBilateralFilter::bilaterial_posnormemit_kernel << < renderGrid, block2 >> >
+					(g_devResultData, g_devPositionData, g_devNormalData, g_devDiffuseData,
+					width, height, *g_fFilterColorEuD.GetFloat(), *g_fFilterPosEuD.GetFloat(), *g_fFilterNormEuD.GetFloat()
+					, *g_fFilterDiffEuD.GetFloat(), *g_uiFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult);
+			}
+			else
+			{
+				cudaBilateralFilter::bilaterial_posnorm_kernel << < renderGrid, block2 >> >
+					(g_devResultData, g_devPositionData, g_devNormalData,
+					width, height, *g_fFilterColorEuD.GetFloat(), *g_fFilterPosEuD.GetFloat(), *g_fFilterNormEuD.GetFloat()
+					, *g_uiFilterRadius.GetUint(), g_devFilterGaussianConst, g_devFilteredResult);
+			}
 
 			// calculate sampling map from converged result
-			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > (g_devFilteredResult, g_devResultData, g_devResultVarData, (uint)(width * height));
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > 
+				(g_devFilteredResult, g_devResultData, g_devSampleResultN, *g_uiDesiredSamplingN.GetUint(),  g_devResultVarData, (uint)(width * height));
 			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
 			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
 			//float meanMSE = sumMSE / (width * height);
-			std::cout << "maxMSE: " << maxMSE << "\n";
+			//std::cout << "maxMSE: " << maxMSE << "\n";
 			//std::cout << "meanMSE: " << meanMSE << "\n";
 
 			//if (g_uCurFrameN == 1)
@@ -1269,18 +1292,25 @@ void updateLightTriCudaMem(RTScene* scene)
 			uint accumPathQueueSize = 0;
 			uint genSize = width * height;
 			//uint debugLoopTime = 0;
+			float leftWindow = 0.f;
+			float rightWindow = maxMSE;
+			float desiredGenSize = width * height / (float)*g_uiDesiredSamplingN.GetUint();
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
 					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), maxMSE);
+					, *g_fMinTraceProb.GetFloat(), rightWindow);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
 				pathQueuesSize.push_back(compactedGenSize);
 				accumPathQueueSize += compactedGenSize;
 				if (compactedGenSize == 0) break;
+				if (compactedGenSize < desiredGenSize)
+					rightWindow = (leftWindow + rightWindow) * 0.5f;
+				else if (compactedGenSize > desiredGenSize)
+					rightWindow = rightWindow + rightWindow * 2.f;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 				//debugLoopTime++;
 			}
