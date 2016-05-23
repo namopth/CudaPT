@@ -196,6 +196,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <CudaCompile Include="..\src\cudaRTBDPTRegen.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilat.cu" />
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatBinary.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatSort.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapEmp.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapPdf.cu" />

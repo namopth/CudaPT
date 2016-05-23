@@ -222,5 +222,8 @@
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatSort.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatBinary.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
