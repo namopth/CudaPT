@@ -36,6 +36,9 @@ namespace NPOSHelper
 	std::string GetRelPathFromFull(const std::string& mainPath, const std::string& convPath);
 	std::string GetOSCurrentDirectory();
 	void SetOSCurrentDirectory(std::string &dir);
+
+	float GetOSTimeInSec();
+	long GetOSTimeInMSec();
 }
 
 #endif

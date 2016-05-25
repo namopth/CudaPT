@@ -1210,9 +1210,10 @@ void updateLightTriCudaMem(RTScene* scene)
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
+				float middleWindow = (leftWindow + rightWindow) * 0.5f;
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
 					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), rightWindow);
+					, *g_fMinTraceProb.GetFloat(), middleWindow);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
@@ -1220,9 +1221,9 @@ void updateLightTriCudaMem(RTScene* scene)
 				accumPathQueueSize += compactedGenSize;
 				if (compactedGenSize == 0) break;
 				if (compactedGenSize < desiredGenSize)
-					rightWindow = (leftWindow + rightWindow) * 0.5f;
+					rightWindow = middleWindow;
 				else if (compactedGenSize > desiredGenSize)
-					rightWindow = rightWindow + rightWindow * 2.f;
+					leftWindow = middleWindow;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 				//debugLoopTime++;
 			}

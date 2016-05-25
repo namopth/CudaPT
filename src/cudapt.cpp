@@ -119,6 +119,7 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_bIsMLBClicked(false)
 	, m_pCapturedConvergedResult(nullptr)
 	, m_uiRMSECaptureSPP(0)
+	, m_fRMSECaptureLimit(0.f)
 {
 
 }
@@ -183,6 +184,7 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Valid' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'")); 
 
+	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmselimit", TW_TYPE_FLOAT, &m_fRMSECaptureLimit, "label='RMSE Limit' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsespp", TW_TYPE_UINT32, &m_uiRMSECaptureSPP, "label='RMSE Collect SPP' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddButton(mainBar, "startcollectrmse", TWToggleCollectRMSE, this, "label='Begin/Cancel Collect RMSE' group='RMSE Experiment'"));
@@ -243,17 +245,29 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 			m_scene.SetIsCudaDirty(true);
 			m_bIsTracing = true;
 		}
-
-		m_fRMSECaptureElapSecTime += deltaTime;
 		m_uiRMSECurSPP++;
 		if ((m_fRMSECaptureSecTime > 0 && m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
-			|| (m_uiRMSECaptureSPP > 0 && m_uiRMSECurSPP > m_uiRMSECaptureSPP))
+			|| (m_uiRMSECaptureSPP > 0 && m_uiRMSECurSPP > m_uiRMSECaptureSPP)
+			|| (m_fRMSECaptureLimit > 0 && m_fRMSECaptureElapSecTime > 0))
 		{
-			std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " sec " << --m_uiRMSECurSPP << " frame\n";
+			long rmseCalcStartTime = NPOSHelper::GetOSTimeInMSec();
 			CalculateRMSE();
-			m_bIsRMSECapturing = false;
-			m_bIsTracing = false;
+			long rmseCalcEndTime = NPOSHelper::GetOSTimeInMSec();
+			float rmseCalcTime = (float)(rmseCalcEndTime - rmseCalcEndTime)*0.001f;
+			if (m_fRMSECaptureLimit == 0 || (m_fRMSEResult <= m_fRMSECaptureLimit && m_fRMSEResult > 0))
+			{
+				std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " sec " << --m_uiRMSECurSPP << " frame\n";
+				std::cout << "RMSE : " << m_fRMSEResult << "\n";
+				m_bIsRMSECapturing = false;
+				m_bIsTracing = false;
+			}
+			else if (m_fRMSECaptureLimit != 0)
+			{
+				m_fRMSECaptureElapSecTime -= rmseCalcTime;
+			}
 		}
+
+		m_fRMSECaptureElapSecTime += deltaTime;
 	}
 
 	// Camera control - bgn
@@ -667,6 +681,7 @@ void CUDAPTWindow::ToggleCollectRMSE()
 	{
 		if (m_pCapturedConvergedResult)
 		{
+			m_fRMSEResult = 0.f;
 			m_bIsRMSECapturing = true;
 			m_fRMSECaptureElapSecTime = 0.f;
 			m_uiRMSECurSPP = 0;
@@ -697,32 +712,32 @@ void CUDAPTWindow::CalculateRMSE()
 		}
 		result = sqrtf(result / (float)sampleN);
 		m_fRMSEResult = result;
-		std::cout << "RMSE : " << result << "\n";
+		//std::cout << "RMSE : " << result << "\n";
 
 		// Debuging...
-		result = 0;
-		uint32 resultInd = 0;
-		for (uint32 i = 0; i < sampleN; i++)
-		{
-			if (std::fabs(m_raytracer.GetResult()[i]) > result)
-			{
-				result = std::fabs(m_raytracer.GetResult()[i]);
-				resultInd = i;
-			}
-		}
-		std::cout << "debug0 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
+		//result = 0;
+		//uint32 resultInd = 0;
+		//for (uint32 i = 0; i < sampleN; i++)
+		//{
+		//	if (std::fabs(m_raytracer.GetResult()[i]) > result)
+		//	{
+		//		result = std::fabs(m_raytracer.GetResult()[i]);
+		//		resultInd = i;
+		//	}
+		//}
+		//std::cout << "debug0 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
 
-		result = 0;
-		resultInd = 0;
-		for (uint32 i = 0; i < sampleN; i++)
-		{
-			if (std::fabs(m_pCapturedConvergedResult[i]) > result)
-			{
-				result = std::fabs(m_pCapturedConvergedResult[i]);
-				resultInd = i;
-			}
-		}
-		std::cout << "debug1 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
+		//result = 0;
+		//resultInd = 0;
+		//for (uint32 i = 0; i < sampleN; i++)
+		//{
+		//	if (std::fabs(m_pCapturedConvergedResult[i]) > result)
+		//	{
+		//		result = std::fabs(m_pCapturedConvergedResult[i]);
+		//		resultInd = i;
+		//	}
+		//}
+		//std::cout << "debug1 : " << result << ", at (" << resultInd / 3 % m_iSizeW << ", " << resultInd / 3 / m_iSizeW << ")\n";
 	}
 	else
 	{

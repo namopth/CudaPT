@@ -1,0 +1,23 @@
+Stream Compaction
+10-sec 0.0871425 56 frames
+30-sec 0.0524263 167 frames
+60-sec 0.0364652 326 frames
+16-spp 0.166334 2.86615 sec
+32-spp 0.118251 5.74127 sec
+64-spp 0.0809663 11.3116 sec
+0.05-rmse 31.4684 sec 182 spp
+0.01-rmse 698.835 sec 3998 spp
+
+Adaptive Stream Compaction
+10-sec 0.0660724 34 frames Speedup 1.31889412
+30-sec 0.0396937 97 frames Speedup 1.32077131
+60-sec 0.0298933 189 frames Speedup 1.21984525
+16-frame 0.0986819 4.47485 sec Speedup 1.68555733
+32-frame 0.0682463 9.52344 sec Speedup 1.73270932
+64-frame 0.0478041 19.705 sec Speedup 1.69371037
+0.05-rmse 12.3015 sec 60 iterations
+0.01-rmse 729.015 sec 3532 iterations
+
+Cheat Adaptive Stream Compaction
+0.05-rmse 10.5979 sec 56 iterations
+0.01-rmse 202.902 sec 1054 iterations

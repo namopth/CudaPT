@@ -118,5 +118,22 @@ namespace NPOSHelper
 	{
 		SetCurrentDirectory(dir.c_str());
 	}
+
+	float GetOSTimeInSec()
+	{
+		SYSTEMTIME time;
+		GetSystemTime(&time);
+		float time_sec = time.wSecond + (float)time.wMilliseconds*0.001f;
+		return time_sec;
+	}
+
+	long GetOSTimeInMSec()
+	{
+		SYSTEMTIME time;
+		GetSystemTime(&time);
+		long time_ms = (time.wSecond * 1000) + time.wMilliseconds;
+		return time_ms;
+	}
+
 #endif
 }

@@ -27,11 +27,11 @@ namespace cudaRTBDPTStreamAdapBilatBinary
 	const char* g_enumDebugModeName[] = { "None", "Traced", "Prob", "Prob With Limit", "Filtered Result" };
 	NPAttrHelper::Attrib g_enumDebugMode("Debug Mode", g_enumDebugModeName, 5, 0);
 
-	NPAttrHelper::Attrib g_fFilterColorEuD("Filter Color E Delta", 15.f);
+	NPAttrHelper::Attrib g_fFilterColorEuD("Filter Color E Delta", 50.f);
 	NPAttrHelper::Attrib g_fFilterPosEuD("Filter Pos E Delta", 1.f);
-	NPAttrHelper::Attrib g_fFilterNormEuD("Filter Norm E Delta", 0.5f);
-	NPAttrHelper::Attrib g_fFilterDiffEuD("Filter Diff E Delta", 0.5f);
-	NPAttrHelper::Attrib g_uiFilterRadius("Filter Radius", 15);
+	NPAttrHelper::Attrib g_fFilterNormEuD("Filter Norm E Delta", 0.25f);
+	NPAttrHelper::Attrib g_fFilterDiffEuD("Filter Diff E Delta", 0.1f);
+	NPAttrHelper::Attrib g_uiFilterRadius("Filter Radius", 5);
 	NPAttrHelper::Attrib g_bFilterDiffuse("Filter Diff Flag", false);
 
 	CUDA_RT_COMMON_ATTRIBS_N(10)
@@ -1294,14 +1294,15 @@ void updateLightTriCudaMem(RTScene* scene)
 			uint genSize = width * height;
 			//uint debugLoopTime = 0;
 			float leftWindow = 0.f;
-			float rightWindow = maxMSE;
+			float rightWindow = maxMSE * 2.f;
 			float desiredGenSize = width * height / (float)*g_uiDesiredSamplingN.GetUint();
 			while (accumPathQueueSize < genSize)
 			{
 				// generate path into temp path
+				float middleWindow = (leftWindow + rightWindow) * 0.5f;
 				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
 					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), rightWindow);
+					, *g_fMinTraceProb.GetFloat(), middleWindow);
 				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
 					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
 				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
@@ -1309,9 +1310,9 @@ void updateLightTriCudaMem(RTScene* scene)
 				accumPathQueueSize += compactedGenSize;
 				if (compactedGenSize == 0) break;
 				if (compactedGenSize < desiredGenSize)
-					rightWindow = (leftWindow + rightWindow) * 0.5f;
+					rightWindow = middleWindow;
 				else if (compactedGenSize > desiredGenSize)
-					rightWindow = rightWindow + rightWindow * 2.f;
+					leftWindow = middleWindow;
 				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
 				//debugLoopTime++;
 			}
