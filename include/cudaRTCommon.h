@@ -25,7 +25,7 @@
 				}
 
 #define BVH_DEPTH_MAX 32
-#define BVH_TRACE_MAX 512
+#define BVH_TRACE_MAX 1024 //512
 
 extern texture<float4, 1, cudaReadModeElementType> g_bvhMinMaxBounds;
 extern texture<uint1, 1, cudaReadModeElementType> g_bvhOffsetTriStartN;
