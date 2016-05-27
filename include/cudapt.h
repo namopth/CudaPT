@@ -41,6 +41,8 @@ public:
 	void ToggleCollectRMSE();
 	void CalculateRMSE();
 
+	void ToggleCollectMassiveData();
+
 	inline RTRenderer* GetRenderer() { return &m_raytracer; }
 
 protected:
@@ -72,6 +74,8 @@ protected:
 	NPMathHelper::Vec2 m_v2CurrentCursorPos;
 
 	// RMSE Comparison
+	bool m_bIsSceneReset;
+	bool m_bIsDelayWaited;
 	float m_fRMSECaptureLimit;
 	uint32 m_uiRMSECaptureSPP;
 	uint32 m_uiRMSECurSPP;
@@ -82,6 +86,15 @@ protected:
 	bool m_bIsShowCapturedConvergedResult;
 	bool m_bIsCapturedConvergedResultValid;
 	float m_fRMSEResult;
+
+	// Data Collecting
+	std::string m_sDataCollectionOutputPath;
+	bool m_bIsDataCollecting;
+	float m_fDataCollectingIntervalSec;
+	uint32 m_u32DataCollectingN;
+	uint32 m_u32DataCollectingCurN;
+	std::vector<float> m_vCollectedDataTemp;
+
 
 	void RenderScreenQuad();
 	GLuint m_uiVBOQuad;

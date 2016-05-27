@@ -82,6 +82,13 @@ void TW_CALL TWToggleCalculateRMSE(void * window)
 		appWin->CalculateRMSE();
 }
 
+void TW_CALL TWToggleCollectMassiveData(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->ToggleCollectMassiveData();
+}
+
 void TW_CALL SetRenderingMethodCallback(const void *value, void *clientData)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)clientData;
@@ -120,6 +127,12 @@ CUDAPTWindow::CUDAPTWindow(const char* name, const int sizeW, const int sizeH)
 	, m_pCapturedConvergedResult(nullptr)
 	, m_uiRMSECaptureSPP(0)
 	, m_fRMSECaptureLimit(0.f)
+	, m_sDataCollectionOutputPath("")
+	, m_bIsDataCollecting(false)
+	, m_fDataCollectingIntervalSec(5.f)
+	, m_u32DataCollectingN(30)
+	, m_u32DataCollectingCurN(0)
+	, m_bIsSceneReset(false)
 {
 
 }
@@ -194,6 +207,12 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddVarRO(mainBar, "collectingcurrentssp", TW_TYPE_UINT32, &m_uiRMSECurSPP, "label='Current SPP' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRO(mainBar, "rmseresult", TW_TYPE_FLOAT, &m_fRMSEResult, "label='RMSE Result' group='RMSE Experiment'"));
 
+	ATB_ASSERT(TwAddButton(mainBar, "startcollectmdata", TWToggleCollectMassiveData, this, "label='Collect Massive Data' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRW(mainBar, "collectdatainterval", TW_TYPE_FLOAT, &m_fDataCollectingIntervalSec, "label='Collect Data Time Interval (sec)' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRW(mainBar, "collectdatan", TW_TYPE_UINT32, &m_u32DataCollectingN, "label='Collect Data N' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "iscollectingmdata", TW_TYPE_BOOLCPP, &m_bIsDataCollecting, " label='Is M Collecting' group='RMSE Experiment'"));
+	ATB_ASSERT(TwAddVarRO(mainBar, "collectdatacurn", TW_TYPE_UINT32, &m_u32DataCollectingCurN, "label='Collected Data N' group='RMSE Experiment'"));
+
 	m_pFinalComposeEffect = m_pShareContent->GetEffect("FinalComposeEffect");
 	if (!m_pFinalComposeEffect->GetIsLinked())
 	{
@@ -240,34 +259,73 @@ int CUDAPTWindow::OnTick(const float deltaTime)
 	// Check Collect RMSE
 	if (m_bIsRMSECapturing)
 	{
-		if (!m_fRMSECaptureElapSecTime)
+		if (!m_bIsSceneReset)
 		{
 			m_scene.SetIsCudaDirty(true);
 			m_bIsTracing = true;
-		}
-		m_uiRMSECurSPP++;
-		if ((m_fRMSECaptureSecTime > 0 && m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
-			|| (m_uiRMSECaptureSPP > 0 && m_uiRMSECurSPP > m_uiRMSECaptureSPP)
-			|| (m_fRMSECaptureLimit > 0 && m_fRMSECaptureElapSecTime > 0))
+			m_bIsSceneReset = true;
+			m_bIsDelayWaited = false;
+		}else if (m_bIsDelayWaited)
 		{
-			long rmseCalcStartTime = NPOSHelper::GetOSTimeInMSec();
-			CalculateRMSE();
-			long rmseCalcEndTime = NPOSHelper::GetOSTimeInMSec();
-			float rmseCalcTime = (float)(rmseCalcEndTime - rmseCalcEndTime)*0.001f;
-			if (m_fRMSECaptureLimit == 0 || (m_fRMSEResult <= m_fRMSECaptureLimit && m_fRMSEResult > 0))
+			m_fRMSECaptureElapSecTime += deltaTime;
+			bool isDataCollectTime = false;
+			if (m_bIsDataCollecting && m_fRMSECaptureElapSecTime >= (m_u32DataCollectingCurN + 1) * m_fDataCollectingIntervalSec)
 			{
-				std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " sec " << --m_uiRMSECurSPP << " frame\n";
-				std::cout << "RMSE : " << m_fRMSEResult << "\n";
-				m_bIsRMSECapturing = false;
-				m_bIsTracing = false;
+				m_u32DataCollectingCurN++;
+				isDataCollectTime = true;
 			}
-			else if (m_fRMSECaptureLimit != 0)
+
+			m_uiRMSECurSPP++;
+			if ((!m_bIsDataCollecting && m_fRMSECaptureSecTime > 0 && m_fRMSECaptureElapSecTime >= m_fRMSECaptureSecTime)
+				|| (!m_bIsDataCollecting && m_uiRMSECaptureSPP > 0 && m_uiRMSECurSPP > m_uiRMSECaptureSPP)
+				|| (!m_bIsDataCollecting && m_fRMSECaptureLimit > 0 && m_fRMSECaptureElapSecTime > 0)
+				|| isDataCollectTime)
 			{
-				m_fRMSECaptureElapSecTime -= rmseCalcTime;
+				long rmseCalcStartTime = NPOSHelper::GetOSTimeInMSec();
+				CalculateRMSE();
+				if (isDataCollectTime)
+				{
+					m_vCollectedDataTemp.push_back(m_fRMSECaptureElapSecTime);
+					m_vCollectedDataTemp.push_back(m_uiRMSECurSPP);
+					m_vCollectedDataTemp.push_back(m_fRMSEResult);
+				}
+				long rmseCalcEndTime = NPOSHelper::GetOSTimeInMSec();
+				float rmseCalcTime = (float)(rmseCalcEndTime - rmseCalcEndTime)*0.001f;
+				if (m_bIsDataCollecting && m_u32DataCollectingCurN >= m_u32DataCollectingN)
+				{
+					NPConfFileHelper::txtConfFile conf(m_sDataCollectionOutputPath);
+					for (uint32 i = 0; i < m_vCollectedDataTemp.size() / 3; i++)
+					{
+						conf.WriteRaw(m_vCollectedDataTemp[i * 3]);
+						conf.WriteRaw(", ");
+						conf.WriteRaw(m_vCollectedDataTemp[i * 3 + 1]);
+						conf.WriteRaw(", ");
+						conf.WriteRaw(m_vCollectedDataTemp[i * 3 + 2]);
+						conf.WriteRaw("\n");
+					}
+					conf.SyncDataToFile();
+					std::cout << "Massive Data Collected at : " << m_sDataCollectionOutputPath << std::endl;
+					m_bIsDataCollecting = false;
+					m_bIsRMSECapturing = false;
+					m_bIsTracing = false;
+				}
+				else if ((!m_bIsDataCollecting && m_fRMSECaptureLimit == 0) || (!m_bIsDataCollecting && m_fRMSEResult <= m_fRMSECaptureLimit && m_fRMSEResult > 0))
+				{
+					std::cout << "Calculate RMSE at : " << m_fRMSECaptureElapSecTime << " sec " << --m_uiRMSECurSPP << " frame\n";
+					std::cout << "RMSE : " << m_fRMSEResult << "\n";
+					m_bIsRMSECapturing = false;
+					m_bIsTracing = false;
+				}
+				else if (m_fRMSECaptureLimit != 0)
+				{
+					m_fRMSECaptureElapSecTime -= rmseCalcTime;
+				}
 			}
 		}
-
-		m_fRMSECaptureElapSecTime += deltaTime;
+		else
+		{
+			m_bIsDelayWaited = true;
+		}
 	}
 
 	// Camera control - bgn
@@ -681,6 +739,7 @@ void CUDAPTWindow::ToggleCollectRMSE()
 	{
 		if (m_pCapturedConvergedResult)
 		{
+			m_bIsSceneReset = false;
 			m_fRMSEResult = 0.f;
 			m_bIsRMSECapturing = true;
 			m_fRMSECaptureElapSecTime = 0.f;
@@ -694,6 +753,36 @@ void CUDAPTWindow::ToggleCollectRMSE()
 	else
 	{
 		m_bIsRMSECapturing = false;
+	}
+}
+
+void CUDAPTWindow::ToggleCollectMassiveData()
+{
+	if (!m_bIsDataCollecting)
+	{
+		if (m_pCapturedConvergedResult)
+		{
+			m_sDataCollectionOutputPath = NPOSHelper::BrowseSaveFile("*.csv\0", "csv");
+			if (m_sDataCollectionOutputPath.length() > 0)
+			{
+				m_bIsSceneReset = false;
+				m_fRMSEResult = 0.f;
+				m_bIsRMSECapturing = m_bIsDataCollecting = true;
+				m_fRMSECaptureElapSecTime = 0.f;
+				m_uiRMSECurSPP = 0;
+				m_u32DataCollectingCurN = 0;
+				m_vCollectedDataTemp.clear();
+			}
+		}
+		else
+		{
+			NPOSHelper::CreateMessageBox("No Converged Result", "Collect RMSE Failed", NPOSHelper::MSGBOX_OK);
+		}
+	}
+	else
+	{
+		m_bIsRMSECapturing = m_bIsDataCollecting = false;
+		m_vCollectedDataTemp.clear();
 	}
 }
 

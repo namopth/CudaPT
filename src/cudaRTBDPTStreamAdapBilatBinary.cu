@@ -965,30 +965,33 @@ void updateLightTriCudaMem(RTScene* scene)
 			if (tempNextSampleResultN > sampleResultN[ind])
 			{
 				float3 sampleResult = pathQueue[x].pathAccumSample;
-				float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
-				float resultInf = 1.f / (float)(tempNextSampleResultN);
-				float oldInf = sampleResultN[ind] * resultInf;
+				if (!isinf(sampleResult.x) && !isinf(sampleResult.y) && !isinf(sampleResult.z))
+				{
+					float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
+					float resultInf = 1.f / (float)(tempNextSampleResultN);
+					float oldInf = sampleResultN[ind] * resultInf;
 
-				result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
-				result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
-				result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-				varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
-				sampleResultN[ind] = tempNextSampleResultN;
+					result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+					result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
+					result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+					varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
+					sampleResultN[ind] = tempNextSampleResultN;
 
-				sampleResult = pathQueue[x].pathDirectPos;
-				posResult[ind * 3] = sampleResult.x;
-				posResult[ind * 3 + 1] = sampleResult.y;
-				posResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectPos;
+					posResult[ind * 3] = sampleResult.x;
+					posResult[ind * 3 + 1] = sampleResult.y;
+					posResult[ind * 3 + 2] = sampleResult.z;
 
-				sampleResult = pathQueue[x].pathDirectNorm;
-				normResult[ind * 3] = sampleResult.x;
-				normResult[ind * 3 + 1] = sampleResult.y;
-				normResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectNorm;
+					normResult[ind * 3] = sampleResult.x;
+					normResult[ind * 3 + 1] = sampleResult.y;
+					normResult[ind * 3 + 2] = sampleResult.z;
 
-				sampleResult = pathQueue[x].pathDirectDiffuse;
-				diffResult[ind * 3] = sampleResult.x;
-				diffResult[ind * 3 + 1] = sampleResult.y;
-				diffResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectDiffuse;
+					diffResult[ind * 3] = sampleResult.x;
+					diffResult[ind * 3 + 1] = sampleResult.y;
+					diffResult[ind * 3 + 2] = sampleResult.z;
+				}
 			}
 		}
 	}

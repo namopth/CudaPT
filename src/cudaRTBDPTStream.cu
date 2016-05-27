@@ -751,13 +751,16 @@ void updateLightTriCudaMem(RTScene* scene)
 			if (tempNextSampleResultN > sampleResultN[ind])
 			{
 				float3 sampleResult = pathQueue[x].pathAccumSample;
-				float resultInf = 1.f / (float)(tempNextSampleResultN);
-				float oldInf = sampleResultN[ind] * resultInf;
+				if (!isinf(sampleResult.x) && !isinf(sampleResult.y) && !isinf(sampleResult.z))
+				{
+					float resultInf = 1.f / (float)(tempNextSampleResultN);
+					float oldInf = sampleResultN[ind] * resultInf;
 
-				result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
-				result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
-				result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-				sampleResultN[ind] = tempNextSampleResultN;
+					result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+					result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
+					result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
+					sampleResultN[ind] = tempNextSampleResultN;
+				}
 			}
 		}
 	}
