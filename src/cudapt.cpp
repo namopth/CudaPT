@@ -33,6 +33,13 @@ void TW_CALL TWSaveResult(void * window)
 		appWin->BrowseAndSaveResult();
 }
 
+void TW_CALL TWSaveMSEResult(void * window)
+{
+	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
+	if (appWin)
+		appWin->BrowseAndSaveMSEResult();
+}
+
 void TW_CALL TWBrowseEnvSetting(void * window)
 {
 	CUDAPTWindow* appWin = (CUDAPTWindow*)window;
@@ -197,6 +204,7 @@ int CUDAPTWindow::OnInit()
 	ATB_ASSERT(TwAddVarRO(mainBar, "isconvergedresultset", TW_TYPE_BOOLCPP, &m_bIsCapturedConvergedResultValid, " label='Is Valid' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddSeparator(mainBar, "convergeresultsep", "group='RMSE Experiment'")); 
 
+	ATB_ASSERT(TwAddButton(mainBar, "savemseresult", TWSaveMSEResult, this, "label='Save MSE Result' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmselimit", TW_TYPE_FLOAT, &m_fRMSECaptureLimit, "label='RMSE Limit' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsesecond", TW_TYPE_FLOAT, &m_fRMSECaptureSecTime, "label='RMSE Collect Sec' group='RMSE Experiment'"));
 	ATB_ASSERT(TwAddVarRW(mainBar, "collectrmsespp", TW_TYPE_UINT32, &m_uiRMSECaptureSPP, "label='RMSE Collect SPP' group='RMSE Experiment'"));
@@ -489,6 +497,43 @@ void CUDAPTWindow::BrowseAndSaveResult()
 					data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f)) * 255;
 					data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f)) * 255;
 					data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f)) * 255;
+				}
+			};
+			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
+		}
+		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+		DELETE_ARRAY(data);
+	}
+	else
+	{
+		NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
+	}
+}
+
+void CUDAPTWindow::BrowseAndSaveMSEResult()
+{
+	std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0", "BMP");
+	if (file.empty())
+		return;
+	if (m_raytracer.GetResult() && m_pCapturedConvergedResult)
+	{
+		unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+		{
+			auto f = [&](const tbb::blocked_range< int >& range) {
+				for (unsigned int i = range.begin(); i < range.end(); i++)
+				{
+					uint32 y = i / m_iSizeW;
+					uint32 x = i - y * m_iSizeW;
+					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
+					float saveData[3] = {
+						(m_raytracer.GetResult()[ind] - m_pCapturedConvergedResult[ind]),
+						(m_raytracer.GetResult()[ind + 1] - m_pCapturedConvergedResult[ind + 1]),
+						(m_raytracer.GetResult()[ind + 2] - m_pCapturedConvergedResult[ind + 2])
+					};
+					float mseData = (saveData[0] * saveData[0] + saveData[1] * saveData[1] + saveData[2] * saveData[2]) / 3.f;
+					data[i * 3] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+					data[i * 3 + 1] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+					data[i * 3 + 2] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
