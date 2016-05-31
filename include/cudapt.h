@@ -29,6 +29,7 @@ public:
 
 	void BrowseModel();
 	void BrowseAndSaveResult();
+	void BrowseAndSaveMSEResult();
 
 	void BrowseEnvSetting();
 	void BrowseAndSaveEnvSetting();
