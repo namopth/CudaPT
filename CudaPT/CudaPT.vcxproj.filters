@@ -129,6 +129,9 @@
     <ClInclude Include="..\include\cudaBilateralFilter.h">
       <Filter>Cuda Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\include\cudaspechelper.h">
+      <Filter>Cuda Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\geohelper.cpp">
@@ -180,25 +183,10 @@
     <CudaCompile Include="..\src\cudaRTBVHDebug.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTPTRR.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTPTRegen.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTRegen.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
     <CudaCompile Include="..\src\cudaRTPTStream.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTPTStreamRegen.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheatSort.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
     <CudaCompile Include="..\src\cudaBilateralFilter.cu">
@@ -207,22 +195,10 @@
     <CudaCompile Include="..\src\cudaRTBDPTStreamBilat.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapPdf.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilat.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapEmp.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatSort.cu">
-      <Filter>Cuda Files</Filter>
-    </CudaCompile>
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatBinary.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
-    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapCheatBinary.cu">
+    <CudaCompile Include="..\src\cudaspechelper.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
   </ItemGroup>
