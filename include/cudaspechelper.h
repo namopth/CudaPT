@@ -21,8 +21,15 @@ namespace NPCudaSpecHelper
 		__hd__ inline float GetData(const uint32 slot) { return m_fSamples[slot]; }
 
 	private:
+#pragma pack(push, 1)
 		float m_fSamples[c_u32SampleN];
+#pragma pack(pop)
 	};
+
+	static Spectrum* g_pDevBaseSpec[3] = { nullptr, nullptr, nullptr };
+	static float g_fBaseSpecIntY = 0.f;
+	__host__ void InitBaseSpectrum();
+	__host__ bool IsBaseSpectrumValid();
 }
 
 #endif

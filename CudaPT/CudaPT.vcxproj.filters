@@ -201,5 +201,8 @@
     <CudaCompile Include="..\src\cudaspechelper.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTPTStreamSpec.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
