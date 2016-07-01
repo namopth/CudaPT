@@ -57,6 +57,7 @@ namespace cudaRTPTStreamSpec
 
 	void freeStreamMem()
 	{
+		NPCudaSpecHelper::ClearBaseSpectrum();
 		g_uPathQueueCur = g_uPathQueueSize = 0;
 		CUFREE(g_devPathQueue);
 		CUFREE(g_devPathStream);
@@ -70,6 +71,8 @@ namespace cudaRTPTStreamSpec
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_devPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
+
+		NPCudaSpecHelper::InitBaseSpectrum();
 	}
 
 	float* g_devResultData = nullptr;

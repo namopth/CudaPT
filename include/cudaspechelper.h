@@ -29,6 +29,7 @@ namespace NPCudaSpecHelper
 	static Spectrum* g_pDevBaseSpec[3] = { nullptr, nullptr, nullptr };
 	static float g_fBaseSpecIntY = 0.f;
 	__host__ void InitBaseSpectrum();
+	__host__ void ClearBaseSpectrum();
 	__host__ bool IsBaseSpectrumValid();
 }
 
