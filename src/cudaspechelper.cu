@@ -8,6 +8,7 @@
 
 namespace NPCudaSpecHelper
 {
+#define LERP(__INT__,__BGN__,__END__) __BGN__ + (__END__ - __BGN__) * __INT__
 	__host__ float AverageSpectrum(const std::vector<float>& specWavelength, const std::vector<float>& specPower,
 		const float lambdaStart, const float lambdaEnd)
 	{
@@ -26,11 +27,15 @@ namespace NPCudaSpecHelper
 		{
 			float segStart = fmaxf(specWavelength[i], lambdaStart);
 			float segEnd = fminf(specWavelength[i + 1], lambdaEnd);
-			sum += () * (segEnd - segStart);
+			sum += 0.5f * (LERP((segStart - specWavelength[i]) / (specWavelength[i + 1] - specWavelength[i])
+				, specPower[i], specPower[i + 1]) 
+				+ LERP((segEnd - specWavelength[i]) / (specWavelength[i + 1] - specWavelength[i])
+				, specPower[i], specPower[i + 1])) * (segEnd - segStart);
 		}
 
-		return sum;
+		return sum / (lambdaEnd - lambdaStart);
 	}
+#undef LERP
 
 	__host__ void InitBaseSpectrum()
 	{
@@ -86,7 +91,35 @@ namespace NPCudaSpecHelper
 				, NPOSHelper::MSGBOX_OK);
 		}
 
+		g_fBaseSpecIntY = 0.f;
+		for (uint32 i = 0; i < c_u32SampleN; i++)
+		{
+			float lambdaInterval = (float)(c_u32LamdaEnd - c_u32LamdaStart)/(float)c_u32SampleN;
+			float xInRange = AverageSpectrum(specWavelength, specPower[0], c_u32LamdaStart + lambdaInterval * i
+				, c_u32LamdaStart + lambdaInterval * (i + 1));
+			float yInRange = AverageSpectrum(specWavelength, specPower[1], c_u32LamdaStart + lambdaInterval * i
+				, c_u32LamdaStart + lambdaInterval * (i + 1));
+			float zInRange = AverageSpectrum(specWavelength, specPower[2], c_u32LamdaStart + lambdaInterval * i
+				, c_u32LamdaStart + lambdaInterval * (i + 1));
+			g_baseSpec[0].SetData(i, xInRange);
+			g_baseSpec[1].SetData(i, yInRange);
+			g_baseSpec[2].SetData(i, zInRange);
+			g_fBaseSpecIntY += yInRange;
+		}
+		CUFREE(g_pDevBaseSpec[0]);
+		CUFREE(g_pDevBaseSpec[1]);
+		CUFREE(g_pDevBaseSpec[2]);
 
+		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[0], sizeof(Spectrum)));
+		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[1], sizeof(Spectrum)));
+		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[2], sizeof(Spectrum)));
+
+		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[0], &g_baseSpec[0]
+			, sizeof(Spectrum), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[1], &g_baseSpec[1]
+			, sizeof(Spectrum), cudaMemcpyHostToDevice));
+		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[2], &g_baseSpec[2]
+			, sizeof(Spectrum), cudaMemcpyHostToDevice));
 	}
 
 	__host__ void ClearBaseSpectrum()
@@ -103,6 +136,31 @@ namespace NPCudaSpecHelper
 
 	__hd__ Spectrum::Spectrum()
 	{
+	}
+
+	__hd__ void Spectrum::GetXYZ(float& x, float& y, float& z
+		, const Spectrum* baseSpec[3], const float baseSpecIntY) const
+	{
+		x = y = z = 0.f;
+		for (uint32 i = 0; i < c_u32SampleN; i++)
+		{
+			x += baseSpec[0]->GetData(i) * GetData(i);
+			y += baseSpec[1]->GetData(i) * GetData(i);
+			z += baseSpec[2]->GetData(i) * GetData(i);
+		}
+		x /= baseSpecIntY;
+		y /= baseSpecIntY;
+		z /= baseSpecIntY;
+	}
+
+	__hd__ void Spectrum::GetRGB(float& r, float& g, float& b
+		, const Spectrum* baseSpec[3], const float baseSpecIntY) const
+	{
+		float xyz[3];
+		GetXYZ(xyz[0], xyz[1], xyz[2], baseSpec, baseSpecIntY);
+		r = 3.240479f*xyz[0] - 1.537150f*xyz[1] - 0.498535f*xyz[2];
+		g = -0.969256f*xyz[0] + 1.875991f*xyz[1] + 0.041556f*xyz[2];
+		b = 0.055648f*xyz[0] - 0.204043f*xyz[1] + 1.057311f*xyz[2];
 	}
 
 }
