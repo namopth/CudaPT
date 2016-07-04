@@ -14,6 +14,7 @@ namespace NPCudaSpecHelper
 	{
 	public:
 		__hd__ Spectrum();
+		__hd__ Spectrum(float* samples);
 		__hd__ ~Spectrum(){}
 
 		__hd__ void ClearData() { for (uint32 i = 0; i < c_u32SampleN; i++) m_fSamples[i] = 0.f; }

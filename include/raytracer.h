@@ -3,7 +3,9 @@ DEFINE_RT(PTNaive, cudaRTPT)
 //DEFINE_RT(PTNaiveRR, cudaRTPTRR)
 //DEFINE_RT(Regen, cudaRTPTRegen)
 DEFINE_RT(PTSC, cudaRTPTStream)
+#ifdef FULLSPECTRAL
 DEFINE_RT(PTSCSpec, cudaRTPTStreamSpec)
+#endif
 //DEFINE_RT(PTSCRegen, cudaRTPTStreamRegen)
 //DEFINE_RT(BDPTRegen, cudaRTBDPTRegen)
 DEFINE_RT(BDPTSC, cudaRTBDPTStream)
@@ -22,12 +24,17 @@ DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
+#define FULLSPECTRAL
 #include "mathhelper.h"
 #include "rayhelper.h"
 #include "bvhhelper.h"
 #include "atbhelper.h"
 
 #include <vector>
+
+#ifdef FULLSPECTRAL
+#include "cudaspechelper.h"
+#endif
 
 struct RTVertex
 {
@@ -72,6 +79,12 @@ struct RTMaterial
 	float sheenTint;
 	float clearcoat;
 	float clearcoatGloss;
+
+#ifdef FULLSPECTRAL
+	float specEmissive[NPCudaSpecHelper::c_u32SampleN];
+	bool isGlass;
+	float glassPara[6];
+#endif
 
 	RTMaterial() 
 		: diffuse(1.0f, 1.0f, 1.0f), emissive(1.0f, 1.0f, 1.0f)

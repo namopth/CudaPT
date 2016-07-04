@@ -136,6 +136,15 @@ namespace NPCudaSpecHelper
 
 	__hd__ Spectrum::Spectrum()
 	{
+		ClearData();
+	}
+
+	__hd__ Spectrum::Spectrum(float* samples)
+	{
+		for (uint32 i = 0; i < c_u32SampleN; i++)
+		{
+			m_fSamples[i] = samples[i];
+		}
 	}
 
 	__hd__ void Spectrum::GetXYZ(float& x, float& y, float& z
@@ -156,6 +165,7 @@ namespace NPCudaSpecHelper
 	__hd__ void Spectrum::GetRGB(float& r, float& g, float& b
 		, const Spectrum* baseSpec[3], const float baseSpecIntY) const
 	{
+		//HD Monitor
 		float xyz[3];
 		GetXYZ(xyz[0], xyz[1], xyz[2], baseSpec, baseSpecIntY);
 		r = 3.240479f*xyz[0] - 1.537150f*xyz[1] - 0.498535f*xyz[2];
