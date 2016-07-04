@@ -240,8 +240,8 @@ namespace cudaRTPTStreamSpec
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				//if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
-				//	pixelContrib = 0.f;
+				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
+					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
 				{
@@ -304,31 +304,37 @@ namespace cudaRTPTStreamSpec
 	}
 
 	__global__ void pt_applyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize
-		, uint width, uint height, float* result, uint32 specSampleN, uint* sampleResultN)
+		, uint width, uint height, uint frameN, float* result, uint32 specSampleN, uint* sampleResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
 		if (x >= pathQueueSize) return;
 
-		if (pathQueue[x].pathSample > 0.f)
+		uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+		if (!frameN)
 		{
-			float3 sampleResult;
-			float resultInf = 1.f / (float)(frameN + 1);
-			float oldInf = 1.f - resultInf;
-			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+			sampleResultN[ind] = 0;
+		}
+		uint tempNextSampleResultN = sampleResultN[ind] + 1;
+
+		if (tempNextSampleResultN > 0)
+		{
+			float sampleResult = pathQueue[x].pathSample;
+			float resultInf = 1.f / (float)(tempNextSampleResultN);
+			float oldInf = sampleResultN[ind] * resultInf;
 			uint specInd = ind * specSampleN + pathQueue[x].pathWaveInd;
-			result[specInd] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
+			result[specInd] = max(resultInf * sampleResult + oldInf * result[specInd], 0.f);
 		}
 	}
 
-	__global__ void pt_converseSpecToRGB_kernel(float* result, uint specSampleN, uint width, uint height, float* rgbResult
-		, NPCudaSpecHelper::Spectrum* baseSpec[3], float baseSpecIntY)
+	__global__ void pt_convertSpecToRGB_kernel(float* result, uint specSampleN, uint width, uint height, float* rgbResult
+		, NPCudaSpecHelper::Spectrum* baseSpec, float baseSpecIntY)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
 		if (x >= width * height) return;
 
-		NPCudaSpecHelper::Spectrum spec(&result[x * specSampleN]);
+		NPCudaSpecHelper::Spectrum spec(result + (x * specSampleN));
 		float3 color;
 		spec.GetRGB(color.x, color.y, color.z, baseSpec, baseSpecIntY);
 
@@ -424,7 +430,7 @@ namespace cudaRTPTStreamSpec
 		dim3 block2(BLOCK_SIZE, BLOCK_SIZE, 1);
 		dim3 renderGrid(ceil(width / (float)block2.x), ceil(height / (float)block2.y), 1);
 		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
-			, g_uCurFrameN, WangHash(g_uCurFrameN), g_devPathQueue);
+			, g_uCurFrameN, WangHash(g_uCurFrameN), NPCudaSpecHelper::c_u32SampleN, g_devPathQueue);
 		cudaDeviceSynchronize();
 
 		uint activePathStreamSize = 0;
@@ -448,18 +454,20 @@ namespace cudaRTPTStreamSpec
 				, NPCudaSpecHelper::c_u32SampleN);
 			cudaDeviceSynchronize();
 			//compact pathstream and find activePathStreamSize value
-			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream, g_devPathStream + activePathStreamSize
-				, is_terminated());
+			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream
+				, g_devPathStream + activePathStreamSize, is_terminated());
 			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 		}
 		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue
-			, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData/*, g_devAccResultData*/);
+			, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, NPCudaSpecHelper::c_u32SampleN
+			, g_devSampleResultN);
 
-		pt_converseSpecToRGB_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >(g_devResultData
-			, NPCudaSpecHelper::c_u32SampleN, width, height, g_devRGBResultData, NPCudaSpecHelper::g_pDevBaseSpec, NPCudaSpecHelper::g_fBaseSpecIntY);
+		pt_convertSpecToRGB_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >(g_devResultData
+			, NPCudaSpecHelper::c_u32SampleN, width, height, g_devRGBResultData, NPCudaSpecHelper::g_pDevBaseSpec
+			, NPCudaSpecHelper::g_fBaseSpecIntY);
 
 		// Copy result to host
-		cudaMemcpy(result, g_devResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
+		cudaMemcpy(result, g_devRGBResultData, g_resultDataSize, cudaMemcpyDeviceToHost);
 		return true;
 	}
 }

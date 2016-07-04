@@ -106,32 +106,29 @@ namespace NPCudaSpecHelper
 			g_baseSpec[2].SetData(i, zInRange);
 			g_fBaseSpecIntY += yInRange;
 		}
-		CUFREE(g_pDevBaseSpec[0]);
-		CUFREE(g_pDevBaseSpec[1]);
-		CUFREE(g_pDevBaseSpec[2]);
+		CUFREE(g_pDevBaseSpec);
 
-		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[0], sizeof(Spectrum)));
-		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[1], sizeof(Spectrum)));
-		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec[2], sizeof(Spectrum)));
+		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec, sizeof(Spectrum) * 3));
 
-		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[0], &g_baseSpec[0]
-			, sizeof(Spectrum), cudaMemcpyHostToDevice));
-		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[1], &g_baseSpec[1]
-			, sizeof(Spectrum), cudaMemcpyHostToDevice));
-		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec[2], &g_baseSpec[2]
-			, sizeof(Spectrum), cudaMemcpyHostToDevice));
+		Spectrum* tempSpectrum = new Spectrum[3];
+		tempSpectrum[0] = g_baseSpec[0];
+		tempSpectrum[1] = g_baseSpec[1];
+		tempSpectrum[2] = g_baseSpec[2];
+
+		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec, tempSpectrum
+			, sizeof(Spectrum) * 3, cudaMemcpyHostToDevice));
+
+		DEL_ARRAY(tempSpectrum);
 	}
 
 	__host__ void ClearBaseSpectrum()
 	{
-		CUFREE(g_pDevBaseSpec[0]);
-		CUFREE(g_pDevBaseSpec[1]);
-		CUFREE(g_pDevBaseSpec[2]);
+		CUFREE(g_pDevBaseSpec);
 	}
 
 	__host__ bool IsBaseSpectrumValid()
 	{
-		return g_fBaseSpecIntY > 0 && g_pDevBaseSpec[0] && g_pDevBaseSpec[1] && g_pDevBaseSpec[2];
+		return g_fBaseSpecIntY > 0 && g_pDevBaseSpec;
 	}
 
 	__hd__ Spectrum::Spectrum()
@@ -148,14 +145,14 @@ namespace NPCudaSpecHelper
 	}
 
 	__hd__ void Spectrum::GetXYZ(float& x, float& y, float& z
-		, const Spectrum* baseSpec[3], const float baseSpecIntY) const
+		, const Spectrum* baseSpec, const float baseSpecIntY) const
 	{
 		x = y = z = 0.f;
 		for (uint32 i = 0; i < c_u32SampleN; i++)
 		{
-			x += baseSpec[0]->GetData(i) * GetData(i);
-			y += baseSpec[1]->GetData(i) * GetData(i);
-			z += baseSpec[2]->GetData(i) * GetData(i);
+			x += baseSpec[0].GetData(i) * GetData(i);
+			y += baseSpec[1].GetData(i) * GetData(i);
+			z += baseSpec[2].GetData(i) * GetData(i);
 		}
 		x /= baseSpecIntY;
 		y /= baseSpecIntY;
@@ -163,7 +160,7 @@ namespace NPCudaSpecHelper
 	}
 
 	__hd__ void Spectrum::GetRGB(float& r, float& g, float& b
-		, const Spectrum* baseSpec[3], const float baseSpecIntY) const
+		, const Spectrum* baseSpec, const float baseSpecIntY) const
 	{
 		//HD Monitor
 		float xyz[3];

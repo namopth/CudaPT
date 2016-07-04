@@ -22,9 +22,9 @@ namespace NPCudaSpecHelper
 		__hd__ inline float GetData(const uint32 slot) const { return m_fSamples[slot]; }
 
 		__hd__ void GetXYZ(float& x, float& y, float& z
-			, const Spectrum* baseSpec[3], const float baseSpecIntY) const;
+			, const Spectrum* baseSpec, const float baseSpecIntY) const;
 		__hd__ void GetRGB(float& r, float& g, float& b
-			, const Spectrum* baseSpec[3], const float baseSpecIntY) const;
+			, const Spectrum* baseSpec, const float baseSpecIntY) const;
 	private:
 #pragma pack(push, 1)
 		float m_fSamples[c_u32SampleN];
@@ -32,7 +32,7 @@ namespace NPCudaSpecHelper
 	};
 
 	static Spectrum g_baseSpec[3];
-	static Spectrum* g_pDevBaseSpec[3] = { nullptr, nullptr, nullptr };
+	static Spectrum* g_pDevBaseSpec;
 	static float g_fBaseSpecIntY = 0.f;
 	__host__ void InitBaseSpectrum();
 	__host__ void ClearBaseSpectrum();
