@@ -248,8 +248,8 @@ namespace cudaRTPTStreamSpec
 				procVertex->pathSample = procVertex->pathSample + (vecMul(emissive , procVertex->pathOutMulTerm)).x;
 
 				// For debuging
-				procVertex->pathSample = NPCudaSpecHelper::RGBToSPDAtInd(1.f, 0.f, 0.f, waveInd
-					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
+				//procVertex->pathSample = NPCudaSpecHelper::RGBToSPDAtInd(1.f, 0.f, 0.f, waveInd
+				//	, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
@@ -296,7 +296,7 @@ namespace cudaRTPTStreamSpec
 
 		float3 dir = normalize(camRight * au + camUp * av + camDir);
 
-		uint waveInd = curand_uniform(&randstate) * sampleSpecN;
+		uint waveInd = curand_uniform(&randstate) * (float)(sampleSpecN - 1);
 		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate, waveInd);
 	}
 
@@ -324,19 +324,24 @@ namespace cudaRTPTStreamSpec
 		if (x >= pathQueueSize) return;
 
 		uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+		uint specInd = ind * specSampleN + pathQueue[x].pathWaveInd;
 		if (!frameN)
 		{
-			sampleResultN[ind] = 0;
+			for (uint i = 0; i < specSampleN; i++)
+			{
+				sampleResultN[ind * specSampleN + i] = 0;
+				result[ind * specSampleN + i] = 0.f;
+			}
 		}
-		uint tempNextSampleResultN = sampleResultN[ind] + 1;
+		uint tempNextSampleResultN = sampleResultN[specInd] + 1;
 
-		if (tempNextSampleResultN > 0)
+		if (tempNextSampleResultN > sampleResultN[specInd])
 		{
 			float sampleResult = pathQueue[x].pathSample;
 			float resultInf = 1.f / (float)(tempNextSampleResultN);
-			float oldInf = sampleResultN[ind] * resultInf;
-			uint specInd = ind * specSampleN + pathQueue[x].pathWaveInd;
+			float oldInf = sampleResultN[specInd] * resultInf;
 			result[specInd] = max(resultInf * sampleResult + oldInf * result[specInd], 0.f);
+			sampleResultN[specInd] = tempNextSampleResultN;
 		}
 	}
 
@@ -347,7 +352,7 @@ namespace cudaRTPTStreamSpec
 
 		if (x >= width * height) return;
 
-		NPCudaSpecHelper::Spectrum spec(result + (x * specSampleN));
+		NPCudaSpecHelper::Spectrum spec(&result[x * specSampleN]);
 		float3 color;
 		spec.GetRGB(color.x, color.y, color.z, baseSpec, baseSpecIntY);
 
@@ -420,11 +425,11 @@ namespace cudaRTPTStreamSpec
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData /*|| !g_devAccResultData*/ || g_devRGBResultData || g_resultDataSize != (sizeof(float) * 3 * width * height))
+		if (!g_devResultData /*|| !g_devAccResultData*/ || !g_devRGBResultData || g_resultDataSize != (sizeof(float) * 3 * width * height))
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
-			cudaMalloc((void**)&g_devResultData, g_resultDataSize * NPCudaSpecHelper::c_u32SampleN);
+			cudaMalloc((void**)&g_devResultData, sizeof(float) * width * height * NPCudaSpecHelper::c_u32SampleN);
 			CUFREE(g_devRGBResultData);
 			cudaMalloc((void**)&g_devRGBResultData, g_resultDataSize);
 			//CUFREE(g_devAccResultData);
