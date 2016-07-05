@@ -81,7 +81,6 @@ struct RTMaterial
 	float clearcoatGloss;
 
 #ifdef FULLSPECTRAL
-	float specEmissive[NPCudaSpecHelper::c_u32SampleN];
 	bool isGlass;
 	float glassPara[6];
 #endif

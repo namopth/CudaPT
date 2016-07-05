@@ -98,7 +98,8 @@ namespace cudaRTPTStreamSpec
 
 	__global__ void pt_traceSample_kernel(RTVertex* vertices, RTTriangle* triangles, RTMaterial* materials
 		, CURTTexture* textures, PTPathVertex** pathStream, uint activePathStreamSize
-		, uint32 lambdaStart, uint32 lambdaEnd, uint32 specSampleN)
+		, uint32 lambdaStart, uint32 lambdaEnd, uint32 specSampleN
+		, NPCudaSpecHelper::Spectrum* baseSpec, float baseSpecIntY)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 		if (x >= activePathStreamSize || pathStream[x]->isTerminated) return;
@@ -136,6 +137,14 @@ namespace cudaRTPTStreamSpec
 				, anisotropic, sheen, sheenTint, clearcoat, clearcoatGloss);
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
 			{
+				uint waveInd = procVertex->pathWaveInd;
+				float waveDiff = NPCudaSpecHelper::RGBToSPDAtInd(diff.x, diff.y, diff.z, waveInd
+					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
+				diff = make_float3(waveDiff, waveDiff, waveDiff);
+				float waveEmissive = NPCudaSpecHelper::RGBToSPDAtInd(emissive.x, emissive.y, emissive.z, waveInd
+					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
+				emissive = make_float3(waveEmissive, waveEmissive, waveEmissive);
+
 				// Get some random microfacet
 				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);
 
@@ -236,7 +245,11 @@ namespace cudaRTPTStreamSpec
 					}
 				}
 
-				//procVertex->pathSample = procVertex->pathSample + vecMul(emissive , procVertex->pathOutMulTerm);
+				procVertex->pathSample = procVertex->pathSample + (vecMul(emissive , procVertex->pathOutMulTerm)).x;
+
+				// For debuging
+				procVertex->pathSample = NPCudaSpecHelper::RGBToSPDAtInd(1.f, 0.f, 0.f, waveInd
+					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
@@ -431,6 +444,7 @@ namespace cudaRTPTStreamSpec
 		dim3 renderGrid(ceil(width / (float)block2.x), ceil(height / (float)block2.y), 1);
 		pt_genPathQueue_kernel << < renderGrid, block2 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 			, g_uCurFrameN, WangHash(g_uCurFrameN), NPCudaSpecHelper::c_u32SampleN, g_devPathQueue);
+		HANDLE_KERNEL_ERROR();
 		cudaDeviceSynchronize();
 
 		uint activePathStreamSize = 0;
@@ -451,20 +465,25 @@ namespace cudaRTPTStreamSpec
 			pt_traceSample_kernel << < dim3(ceil((float)activePathStreamSize / (float)block1.x), 1, 1), block1 >> > (g_devVertices
 				, g_devTriangles, g_devMaterials, g_devTextures, g_devPathStream, activePathStreamSize
 				, NPCudaSpecHelper::c_u32LamdaStart, NPCudaSpecHelper::c_u32LamdaEnd
-				, NPCudaSpecHelper::c_u32SampleN);
+				, NPCudaSpecHelper::c_u32SampleN, NPCudaSpecHelper::g_pDevBaseSpec
+				, NPCudaSpecHelper::g_fBaseSpecIntY);
+			HANDLE_KERNEL_ERROR();
 			cudaDeviceSynchronize();
 			//compact pathstream and find activePathStreamSize value
 			PTPathVertex** compactedStreamEndItr = thrust::remove_if(thrust::device, g_devPathStream
 				, g_devPathStream + activePathStreamSize, is_terminated());
+			HANDLE_KERNEL_ERROR();
 			activePathStreamSize = compactedStreamEndItr - g_devPathStream;
 		}
 		pt_applyPathQueueResult_kernel << < dim3(ceil((float)g_uPathQueueSize / (float)block1.x), 1, 1), block1 >> >(g_devPathQueue
 			, g_uPathQueueSize, width, height, g_uCurFrameN, g_devResultData, NPCudaSpecHelper::c_u32SampleN
 			, g_devSampleResultN);
+		HANDLE_KERNEL_ERROR();
 
 		pt_convertSpecToRGB_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >(g_devResultData
 			, NPCudaSpecHelper::c_u32SampleN, width, height, g_devRGBResultData, NPCudaSpecHelper::g_pDevBaseSpec
 			, NPCudaSpecHelper::g_fBaseSpecIntY);
+		HANDLE_KERNEL_ERROR();
 
 		// Copy result to host
 		cudaMemcpy(result, g_devRGBResultData, g_resultDataSize, cudaMemcpyDeviceToHost);

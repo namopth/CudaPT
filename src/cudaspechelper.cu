@@ -8,6 +8,10 @@
 
 namespace NPCudaSpecHelper
 {
+	Spectrum g_baseSpec[3];
+	Spectrum* g_pDevBaseSpec = nullptr;
+	float g_fBaseSpecIntY = 0.f;
+
 #define LERP(__INT__,__BGN__,__END__) __BGN__ + (__END__ - __BGN__) * __INT__
 	__host__ float AverageSpectrum(const std::vector<float>& specWavelength, const std::vector<float>& specPower,
 		const float lambdaStart, const float lambdaEnd)
@@ -110,15 +114,8 @@ namespace NPCudaSpecHelper
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_pDevBaseSpec, sizeof(Spectrum) * 3));
 
-		Spectrum* tempSpectrum = new Spectrum[3];
-		tempSpectrum[0] = g_baseSpec[0];
-		tempSpectrum[1] = g_baseSpec[1];
-		tempSpectrum[2] = g_baseSpec[2];
-
-		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec, tempSpectrum
+		HANDLE_ERROR(cudaMemcpy(g_pDevBaseSpec, g_baseSpec
 			, sizeof(Spectrum) * 3, cudaMemcpyHostToDevice));
-
-		DEL_ARRAY(tempSpectrum);
 	}
 
 	__host__ void ClearBaseSpectrum()
@@ -129,6 +126,61 @@ namespace NPCudaSpecHelper
 	__host__ bool IsBaseSpectrumValid()
 	{
 		return g_fBaseSpecIntY > 0 && g_pDevBaseSpec;
+	}
+
+	__hd__ void XYZToRGB(const float x, const float y, const float z
+		, float& r, float& g, float& b)
+	{
+		r = 3.240479f*x - 1.537150f*y - 0.498535f*z;
+		g = -0.969256f*x + 1.875991f*y + 0.041556f*z;
+		b = 0.055648f*x - 0.204043f*y + 1.057311f*z;
+	}
+
+	__hd__ void RGBToXYZ(const float r, const float g, const float b
+		, float& x, float& y, float& z)
+	{
+		x = 0.412453f*r + 0.357580f*g + 0.180423f*b;
+		y = 0.212671f*r + 0.715160f*g + 0.072169f*b;
+		z = 0.019334f*r + 0.119193f*g + 0.950227f*b;
+	}
+
+	__hd__ void SPDToXYZ(const float spd[c_u32SampleN], float& x, float& y, float& z
+		, const float* baseSpecX, const float* baseSpecY, const float* baseSpecZ, const float baseSpecIntY)
+	{
+		x = y = z = 0.f;
+		for (uint32 i = 0; i < c_u32SampleN; i++)
+		{
+			x += baseSpecX[i] * spd[i];
+			y += baseSpecY[i] * spd[i];
+			z += baseSpecZ[i] * spd[i];
+		}
+		x /= baseSpecIntY;
+		y /= baseSpecIntY;
+		z /= baseSpecIntY;
+	}
+
+	__hd__ void SPDToRGB(const float spd[c_u32SampleN], float& r, float& g, float& b
+		, const float* baseSpecX, const float* baseSpecY, const float* baseSpecZ, const float baseSpecIntY)
+	{
+		float x, y, z;
+		SPDToXYZ(spd, x, y, z, baseSpecX, baseSpecY, baseSpecZ, baseSpecIntY);
+		XYZToRGB(x, y, z, r, g, b);
+	}
+
+	__hd__ float XYZToSPDAtInd(const float x, const float y, const float z, const uint32 spdInd
+		, const float* baseSpecX, const float* baseSpecY, const float* baseSpecZ
+		, const float baseSpecIntY)
+	{
+		return (x * baseSpecX[spdInd] + y * baseSpecY[spdInd] + z * baseSpecZ[spdInd]);
+	}
+
+	__hd__ float RGBToSPDAtInd(const float r, const float g, const float b, const uint32 spdInd
+		, const float* baseSpecX, const float* baseSpecY, const float* baseSpecZ
+		, const float baseSpecIntY)
+	{
+		float x, y, z;
+		RGBToXYZ(r, g, b, x, y, z);
+		return XYZToSPDAtInd(x, y, z, spdInd, baseSpecX, baseSpecY, baseSpecZ, baseSpecIntY);
 	}
 
 	__hd__ Spectrum::Spectrum()
@@ -147,27 +199,15 @@ namespace NPCudaSpecHelper
 	__hd__ void Spectrum::GetXYZ(float& x, float& y, float& z
 		, const Spectrum* baseSpec, const float baseSpecIntY) const
 	{
-		x = y = z = 0.f;
-		for (uint32 i = 0; i < c_u32SampleN; i++)
-		{
-			x += baseSpec[0].GetData(i) * GetData(i);
-			y += baseSpec[1].GetData(i) * GetData(i);
-			z += baseSpec[2].GetData(i) * GetData(i);
-		}
-		x /= baseSpecIntY;
-		y /= baseSpecIntY;
-		z /= baseSpecIntY;
+		SPDToXYZ(m_fSamples, x, y, z, baseSpec[0].GetData(), baseSpec[1].GetData()
+			, baseSpec[2].GetData(), baseSpecIntY);
 	}
 
 	__hd__ void Spectrum::GetRGB(float& r, float& g, float& b
 		, const Spectrum* baseSpec, const float baseSpecIntY) const
 	{
-		//HD Monitor
-		float xyz[3];
-		GetXYZ(xyz[0], xyz[1], xyz[2], baseSpec, baseSpecIntY);
-		r = 3.240479f*xyz[0] - 1.537150f*xyz[1] - 0.498535f*xyz[2];
-		g = -0.969256f*xyz[0] + 1.875991f*xyz[1] + 0.041556f*xyz[2];
-		b = 0.055648f*xyz[0] - 0.204043f*xyz[1] + 1.057311f*xyz[2];
+		SPDToRGB(m_fSamples, r, g, b, baseSpec[0].GetData(), baseSpec[1].GetData()
+			, baseSpec[2].GetData(), baseSpecIntY);
 	}
 
 }
