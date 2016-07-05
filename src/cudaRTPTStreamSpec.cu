@@ -353,6 +353,13 @@ namespace cudaRTPTStreamSpec
 		if (x >= width * height) return;
 
 		NPCudaSpecHelper::Spectrum spec(&result[x * specSampleN]);
+
+		for (uint i = 0; i < specSampleN; i++)
+		{
+			spec.SetData(i,NPCudaSpecHelper::RGBToSPDAtInd(1.0f,0.f,0.f, i
+				, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY));
+		}
+
 		float3 color;
 		spec.GetRGB(color.x, color.y, color.z, baseSpec, baseSpecIntY);
 
