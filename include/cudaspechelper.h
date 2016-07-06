@@ -1,6 +1,8 @@
 #ifndef SPECTRALHELPER_H
 #define SPECTRALHELPER_H
 
+#include <vector>
+
 #include "mathhelper.h"
 #include "cudahelper.h"
 
@@ -36,6 +38,8 @@ namespace NPCudaSpecHelper
 	extern Spectrum g_baseSpec[3];
 	extern Spectrum* g_pDevBaseSpec;
 	extern float g_fBaseSpecIntY;
+	__host__ float AverageSpectrum(const std::vector<float>& specWavelength, const std::vector<float>& specPower
+		,const float lambdaStart, const float lambdaEnd);
 	__host__ void InitBaseSpectrum();
 	__host__ void ClearBaseSpectrum();
 	__host__ bool IsBaseSpectrumValid();

@@ -4,6 +4,7 @@
 #include <tbb/blocked_range2d.h>
 
 #include <iostream>
+#include <sstream>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -13,6 +14,7 @@
 
 #include "cudahelper.h"
 #include "attrhelper.h"
+#include "oshelper.h"
 
 #define RT_XGEN
 #define DEFINE_RT(__name__, __codename__) \
@@ -312,12 +314,74 @@ void RTScene::UpdateMaterialsDirtyFlag()
 
 void TW_CALL TwBrowseSpecReflFile(void* window)
 {
-
+	((RTScene*)window)->BrowseSpecReflFile();
 }
 
-void TW_CALL TwBrowseBiSpecReflFile(void* window)
+void TW_CALL TwBrowseBispecReflFile(void* window)
 {
+	((RTScene*)window)->BrowseBispecReflFile();
+}
 
+bool RTScene::BrowseSpecReflFile()
+{
+	if (m_iCurrentMaterialId < 0)
+		return false;
+
+	bool isValid = false;
+	std::string file = NPOSHelper::BrowseOpenFile("All\0*.*\0Text\0*.TXT\0");
+	if (file.empty())
+		return false;
+
+	std::ifstream specFile(file);
+	if (specFile.is_open())
+	{
+		std::vector<float> specDataWavelength;
+		std::vector<float> specDataPower;
+		while (specFile.good())
+		{
+			std::string line;
+			if (!std::getline(specFile, line))
+				break;
+			std::istringstream sline(line);
+			float wavelength;
+			float power;
+			if (sline >> wavelength)
+			{
+				sline >> power;
+				specDataWavelength.push_back(wavelength*1000.0f);
+				specDataPower.push_back(power*0.01f);
+				//std::cout << "spectral data: " << wavelength * 1000.0f << ", " << power*0.01f << std::endl;
+			}
+		}
+
+		float lambdaInterval = (float)(NPCudaSpecHelper::c_u32LamdaEnd - NPCudaSpecHelper::c_u32LamdaStart) 
+			/ (float)NPCudaSpecHelper::c_u32SampleN;
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			float matSpecPower = NPCudaSpecHelper::AverageSpectrum(specDataWavelength, specDataPower
+				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * i
+				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * (i + 1));
+			m_pMaterials[m_iCurrentMaterialId].specPara[i*NPCudaSpecHelper::c_u32SampleN + i] = matSpecPower;
+
+			//std::cout << "spectral data: " << i << ", " << matSpecPower << std::endl;
+		}
+
+		isValid = true;
+	}
+	specFile.close();
+
+	if (!isValid){
+		std::string message = "Cannot load file ";
+		message = message + file;
+		NPOSHelper::CreateMessageBox(message.c_str(), "Load Spectral Reflectivitiy File Failure", NPOSHelper::MSGBOX_OK);
+		return false;
+	}
+	return isValid;
+}
+
+bool RTScene::BrowseBispecReflFile()
+{
+	return false;
 }
 
 #endif
@@ -335,7 +399,7 @@ void RTScene::SetTWMaterialBar(const int matId)
 
 	if (matId < m_pMaterials.size() && matId > 0)
 	{
-		unsigned int i = matId;
+		unsigned int i = m_iCurrentMaterialId = matId;
 		std::string matName = "mat" + std::to_string(i);
 		std::string matPara = "group='" + matName + "'";
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Diffuse" + matName).c_str(), TW_TYPE_COLOR3F, m_pMaterials[i].diffuse._e, matPara.c_str()));
@@ -355,7 +419,7 @@ void RTScene::SetTWMaterialBar(const int matId)
 #ifdef FULLSPECTRAL
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecRefl", TwBrowseSpecReflFile
 			, this, "label='Load Spectral Reflectivity' group='Full Spectral'"));
-		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadBiSpecRefl", TwBrowseBiSpecReflFile
+		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadBiSpecRefl", TwBrowseBispecReflFile
 			, this, "label='Load Bispectral Reflectivity' group='Full Spectral'"));
 #endif
 	}

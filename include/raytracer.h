@@ -104,6 +104,27 @@ struct RTMaterial
 
 	bool operator==(const RTMaterial& rhs)
 	{
+
+#ifdef FULLSPECTRAL
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			if (specPara[i] != rhs.specPara[i])
+			{
+				return false;
+			}
+		}
+		if (isChangeWavelength != rhs.isChangeWavelength)
+		{
+			return false;
+		}
+		for (uint32 i = 0; i < 6; i++)
+		{
+			if (glassPara[i] != rhs.glassPara[i])
+			{
+				return false;
+			}
+		}
+#endif
 		return (diffuse == rhs.diffuse) && (emissive == rhs.emissive)
 			&& (diffuseTexId == rhs.diffuseTexId) && (normalTexId == rhs.normalTexId)
 			&& (emissiveTexId == rhs.emissiveTexId) && (matType == rhs.matType)
@@ -148,6 +169,7 @@ public:
 		unsigned int subObjId;
 	};
 	RTScene() : m_bIsCudaDirty(true), m_bIsCudaMaterialDirty(true), m_pMaterialBar(nullptr)
+		, m_iCurrentMaterialId(-1)
 	{}
 
 	inline const NPBVHHelper::CompactBVH* GetCompactBVH() const { return &m_compactBVH; }
@@ -165,6 +187,11 @@ public:
 
 	void SetTWMaterialBar(const int matId = -1);
 
+#ifdef FULLSPECTRAL
+	bool BrowseSpecReflFile();
+	bool BrowseBispecReflFile();
+#endif
+
 	std::vector<std::string> m_vLoadedModelPaths;
 	std::vector<RTVertex> m_pVertices;
 	std::vector<RTTriangle> m_pTriangles;
@@ -181,6 +208,7 @@ protected:
 	bool m_bIsCudaMaterialDirty;
 
 	TwBar* m_pMaterialBar;
+	int m_iCurrentMaterialId;
 };
 
 class RTRenderer

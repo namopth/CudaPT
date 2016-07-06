@@ -96,9 +96,9 @@ namespace NPCudaSpecHelper
 		}
 
 		g_fBaseSpecIntY = 0.f;
+		float lambdaInterval = (float)(c_u32LamdaEnd - c_u32LamdaStart) / (float)c_u32SampleN;
 		for (uint32 i = 0; i < c_u32SampleN; i++)
 		{
-			float lambdaInterval = (float)(c_u32LamdaEnd - c_u32LamdaStart)/(float)c_u32SampleN;
 			float xInRange = AverageSpectrum(specWavelength, specPower[0], c_u32LamdaStart + lambdaInterval * i
 				, c_u32LamdaStart + lambdaInterval * (i + 1));
 			float yInRange = AverageSpectrum(specWavelength, specPower[1], c_u32LamdaStart + lambdaInterval * i
