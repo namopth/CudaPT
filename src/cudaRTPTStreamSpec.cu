@@ -247,10 +247,6 @@ namespace cudaRTPTStreamSpec
 
 				procVertex->pathSample = procVertex->pathSample + (vecMul(emissive , procVertex->pathOutMulTerm)).x;
 
-				// For debuging
-				//procVertex->pathSample = NPCudaSpecHelper::RGBToSPDAtInd(1.f, 0.f, 0.f, waveInd
-				//	, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
-
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
 				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
@@ -354,11 +350,11 @@ namespace cudaRTPTStreamSpec
 
 		NPCudaSpecHelper::Spectrum spec(&result[x * specSampleN]);
 
-		for (uint i = 0; i < specSampleN; i++)
-		{
-			spec.SetData(i,NPCudaSpecHelper::RGBToSPDAtInd(1.0f,0.f,0.f, i
-				, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY));
-		}
+		//for (uint i = 0; i < specSampleN; i++)
+		//{
+		//	spec.SetData(i,NPCudaSpecHelper::RGBToSPDAtInd(1.0f,0.f,0.f, i
+		//		, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY));
+		//}
 
 		float3 color;
 		spec.GetRGB(color.x, color.y, color.z, baseSpec, baseSpecIntY);

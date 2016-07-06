@@ -306,6 +306,22 @@ void RTScene::UpdateMaterialsDirtyFlag()
 	}
 }
 
+#ifdef FULLSPECTRAL
+// Load spectral reflection from data files on 
+// http://speclib.jpl.nasa.gov/
+
+void TW_CALL TwBrowseSpecReflFile(void* window)
+{
+
+}
+
+void TW_CALL TwBrowseBiSpecReflFile(void* window)
+{
+
+}
+
+#endif
+
 void RTScene::SetTWMaterialBar(const int matId)
 {
 	if (m_pMaterialBar)
@@ -335,6 +351,13 @@ void RTScene::SetTWMaterialBar(const int matId)
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("SheenTint" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].sheenTint, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Clearcoat" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoat, matPara.c_str()));
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("ClearcoatGloss" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoatGloss, matPara.c_str()));
+
+#ifdef FULLSPECTRAL
+		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecRefl", TwBrowseSpecReflFile
+			, this, "label='Load Spectral Reflectivity' group='Full Spectral'"));
+		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadBiSpecRefl", TwBrowseBiSpecReflFile
+			, this, "label='Load Bispectral Reflectivity' group='Full Spectral'"));
+#endif
 	}
 }
 
