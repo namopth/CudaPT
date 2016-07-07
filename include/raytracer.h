@@ -100,7 +100,16 @@ struct RTMaterial
 		, sheenTint(0.f)
 		, clearcoat(0.f)
 		, clearcoatGloss(0.f)
-	{}
+	{
+#ifdef FULLSPECTRAL
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN * NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			uint32 vertPos = i / NPCudaSpecHelper::c_u32SampleN;
+			uint32 horiPos = i - vertPos * NPCudaSpecHelper::c_u32SampleN;
+			specPara[i] = (vertPos == horiPos) ? 1.0f : 0.f;
+		}
+#endif
+	}
 
 	bool operator==(const RTMaterial& rhs)
 	{
@@ -137,6 +146,36 @@ struct RTMaterial
 	bool operator!=(const RTMaterial& rhs)
 	{
 		return !(*this == rhs);
+	}
+	void operator=(const RTMaterial& rhs)
+	{
+#ifdef FULLSPECTRAL
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			specPara[i] = rhs.specPara[i];
+		}
+		isChangeWavelength = rhs.isChangeWavelength;
+		for (uint32 i = 0; i < 6; i++)
+		{
+			glassPara[i] = rhs.glassPara[i];
+		}
+#endif
+		diffuse = rhs.diffuse;
+		emissive = rhs.emissive;
+		diffuseTexId = rhs.diffuseTexId;
+		normalTexId = rhs.normalTexId;
+		emissiveTexId = rhs.emissiveTexId;
+		matType = rhs.matType;
+		transparency = rhs.transparency;
+		specular = rhs.specular;
+		metallic = rhs.metallic;
+		roughness = rhs.roughness;
+		anisotropic = rhs.anisotropic;
+		sheen = rhs.sheen;
+		sheenTint = rhs.sheenTint;
+		clearcoat = rhs.clearcoat;
+		clearcoatGloss = rhs.clearcoatGloss;
+		subsurface = rhs.subsurface;
 	}
 };
 

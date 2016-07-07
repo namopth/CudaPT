@@ -138,12 +138,15 @@ namespace cudaRTPTStreamSpec
 			float3 nl = vecDot(norm, ray.dir) < 0.f ? norm : -1 * norm;
 			{
 				uint waveInd = procVertex->pathWaveInd;
-				float waveDiff = NPCudaSpecHelper::RGBToSPDAtInd(diff.x, diff.y, diff.z, waveInd
-					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
-				diff = make_float3(waveDiff, waveDiff, waveDiff);
-				float waveEmissive = NPCudaSpecHelper::RGBToSPDAtInd(emissive.x, emissive.y, emissive.z, waveInd
-					, baseSpec[0].GetData(), baseSpec[1].GetData(), baseSpec[2].GetData(), baseSpecIntY);
-				emissive = make_float3(waveEmissive, waveEmissive, waveEmissive);
+				float waveSpecData = mat->specPara[waveInd*specSampleN + waveInd];
+				if (length(emissive) > 0.f)
+				{
+					emissive = emissive * waveSpecData;
+				}
+				else
+				{
+					diff = make_float3(waveSpecData, waveSpecData, waveSpecData);
+				}
 
 				// Get some random microfacet
 				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);

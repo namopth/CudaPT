@@ -298,6 +298,7 @@ void RTScene::UpdateMaterialsDirtyFlag()
 		{
 			for (uint32 i = 0; i < m_pMaterials.size(); i++)
 			{
+				m_pLastMaterials[i] = m_pMaterials[i];
 				if (m_pMaterials[i] != m_pLastMaterials[i])
 				{
 					m_pLastMaterials[i] = m_pMaterials[i];
@@ -311,6 +312,7 @@ void RTScene::UpdateMaterialsDirtyFlag()
 #ifdef FULLSPECTRAL
 // Load spectral reflection from data files on 
 // http://speclib.jpl.nasa.gov/
+// http://galileo.graphycs.cegepsherbrooke.qc.ca/app/en/home
 
 void TW_CALL TwBrowseSpecReflFile(void* window)
 {
@@ -352,6 +354,14 @@ bool RTScene::BrowseSpecReflFile()
 				specDataPower.push_back(power*0.01f);
 				//std::cout << "spectral data: " << wavelength * 1000.0f << ", " << power*0.01f << std::endl;
 			}
+		}
+
+		m_pMaterials[m_iCurrentMaterialId].diffuse = NPMathHelper::Vec3(1.f, 1.f, 1.f);
+		m_pMaterials[m_iCurrentMaterialId].emissive = NPMathHelper::Vec3(0.f, 0.f, 0.f);
+
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			m_pMaterials[m_iCurrentMaterialId].specPara[i] = 0.f;
 		}
 
 		float lambdaInterval = (float)(NPCudaSpecHelper::c_u32LamdaEnd - NPCudaSpecHelper::c_u32LamdaStart) 
