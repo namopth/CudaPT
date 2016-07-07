@@ -298,7 +298,6 @@ void RTScene::UpdateMaterialsDirtyFlag()
 		{
 			for (uint32 i = 0; i < m_pMaterials.size(); i++)
 			{
-				m_pLastMaterials[i] = m_pMaterials[i];
 				if (m_pMaterials[i] != m_pLastMaterials[i])
 				{
 					m_pLastMaterials[i] = m_pMaterials[i];
@@ -375,7 +374,6 @@ bool RTScene::BrowseSpecReflFile()
 
 			//std::cout << "spectral data: " << i << ", " << matSpecPower << std::endl;
 		}
-
 		isValid = true;
 	}
 	specFile.close();
