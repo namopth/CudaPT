@@ -312,6 +312,14 @@ void RTScene::UpdateMaterialsDirtyFlag()
 // Load spectral reflection from data files on 
 // http://speclib.jpl.nasa.gov/
 // http://galileo.graphycs.cegepsherbrooke.qc.ca/app/en/home
+// http://www.schott.com/
+// http://refractiveindex.info/
+
+
+void TW_CALL TwBrowseASTERSpecReflFile(void* window)
+{
+	((RTScene*)window)->BrowseSpecReflFile(1000.f, 0.01f);
+}
 
 void TW_CALL TwBrowseSpecReflFile(void* window)
 {
@@ -323,7 +331,7 @@ void TW_CALL TwBrowseBispecReflFile(void* window)
 	((RTScene*)window)->BrowseBispecReflFile();
 }
 
-bool RTScene::BrowseSpecReflFile()
+bool RTScene::BrowseSpecReflFile(float wavelengthMul, float powerMul)
 {
 	if (m_iCurrentMaterialId < 0)
 		return false;
@@ -349,8 +357,8 @@ bool RTScene::BrowseSpecReflFile()
 			if (sline >> wavelength)
 			{
 				sline >> power;
-				specDataWavelength.push_back(wavelength*1000.0f);
-				specDataPower.push_back(power*0.01f);
+				specDataWavelength.push_back(wavelength*wavelengthMul);
+				specDataPower.push_back(power*powerMul);
 				//std::cout << "spectral data: " << wavelength * 1000.0f << ", " << power*0.01f << std::endl;
 			}
 		}
@@ -425,10 +433,17 @@ void RTScene::SetTWMaterialBar(const int matId)
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("ClearcoatGloss" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoatGloss, matPara.c_str()));
 
 #ifdef FULLSPECTRAL
+		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadASTERSpecRefl", TwBrowseASTERSpecReflFile
+			, this, "label='Load ASTER Spectral Reflectivity' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecRefl", TwBrowseSpecReflFile
 			, this, "label='Load Spectral Reflectivity' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadBiSpecRefl", TwBrowseBispecReflFile
 			, this, "label='Load Bispectral Reflectivity' group='Full Spectral'"));
+		for (uint32 j = 0; j < 6; j++)
+		{
+			ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("GlassPara" + std::to_string(j) + matName).c_str()
+				, TW_TYPE_FLOAT, &m_pMaterials[i].glassPara[j], "group='Full Spectral'"));
+		}
 #endif
 	}
 }

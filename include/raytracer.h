@@ -108,6 +108,10 @@ struct RTMaterial
 			uint32 horiPos = i - vertPos * NPCudaSpecHelper::c_u32SampleN;
 			specPara[i] = (vertPos == horiPos) ? 1.0f : 0.f;
 		}
+		for (uint32 i = 0; i < 6; i++)
+		{
+			glassPara[i] = 1.0f;
+		}
 #endif
 	}
 
@@ -227,7 +231,7 @@ public:
 	void SetTWMaterialBar(const int matId = -1);
 
 #ifdef FULLSPECTRAL
-	bool BrowseSpecReflFile();
+	bool BrowseSpecReflFile(float wavelengthMul = 1.0f, float powerMul = 1.0f);
 	bool BrowseBispecReflFile();
 #endif
 
