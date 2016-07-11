@@ -180,11 +180,11 @@ namespace cudaRTPTStreamSpec
 					float nnt = into ? nc / nt : nt / nc;
 					float ddn = vecDot(hDir, ray.dir);
 					float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
-					if (cos2t < 0.f)
-					{
-						reflProb = 1.0f;// refrProb = 0.f;
-					}
-					else
+					//if (cos2t < 0.f)
+					//{
+					//	reflProb = 1.0f;// refrProb = 0.f;
+					//}
+					//else
 					{
 						refrDir = normalize(ray.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
 					}
@@ -254,7 +254,8 @@ namespace cudaRTPTStreamSpec
 					}
 				}
 
-				procVertex->pathSample = procVertex->pathSample + (vecMul(emissive , procVertex->pathOutMulTerm)).x;
+				procVertex->pathSample = (vecDot(nl, norm) < 0.f) ? procVertex->pathSample
+					: procVertex->pathSample + (vecMul(emissive, procVertex->pathOutMulTerm)).x;
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 

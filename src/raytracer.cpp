@@ -369,7 +369,7 @@ bool RTScene::BrowseSpecReflFile(float wavelengthMul, float powerMul)
 		}
 
 		m_pMaterials[m_iCurrentMaterialId].diffuse = NPMathHelper::Vec3(1.f, 1.f, 1.f);
-		m_pMaterials[m_iCurrentMaterialId].emissive = NPMathHelper::Vec3(0.f, 0.f, 0.f);
+		//m_pMaterials[m_iCurrentMaterialId].emissive = NPMathHelper::Vec3(0.f, 0.f, 0.f);
 
 		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
 		{

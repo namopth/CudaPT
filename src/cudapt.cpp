@@ -621,6 +621,29 @@ void CUDAPTWindow::BrowseEnvSetting()
 				}
 			}
 		}
+		else if (!varName.compare("materials_spec"))
+		{
+			uint32 size;
+			uint32 sampleN;
+			conf.Read(size);
+			conf.Read(sampleN);
+			if (m_scene.m_pMaterials.size() >= size && NPCudaSpecHelper::c_u32SampleN == sampleN)
+			{
+				for (uint32 i = 0; i < size; i++)
+				{
+					conf.Read(m_scene.m_pMaterials[i].isChangeWavelength);
+					for (uint j = 0; j < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; j++)
+					{
+						conf.Read(m_scene.m_pMaterials[i].specPara[j]);
+					}
+					conf.Read(m_scene.m_pMaterials[i].isUseSpecIOR);
+					for (uint j = 0; j < NPCudaSpecHelper::c_u32SampleN; j++)
+					{
+						conf.Read(m_scene.m_pMaterials[i].specIOR[j]);
+					}
+				}
+			}
+		}
 		else if (!varName.compare("convergedresult"))
 		{
 			float* tempData = new float[m_iSizeH * m_iSizeW * 3];
@@ -701,6 +724,25 @@ void CUDAPTWindow::BrowseAndSaveEnvSetting()
 			conf.Write(it.subsurface);
 			conf.Write(it.transparency);
 		}
+
+#ifdef FULLSPECTRAL
+		conf.WriteVar("materials_spec");
+		conf.Write(m_scene.m_pMaterials.size());
+		conf.Write(NPCudaSpecHelper::c_u32SampleN);
+		for (auto it : m_scene.m_pMaterials)
+		{
+			conf.Write(it.isChangeWavelength);
+			for (uint i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
+			{
+				conf.Write(it.specPara[i]);
+			}
+			conf.Write(it.isUseSpecIOR);
+			for (uint i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
+			{
+				conf.Write(it.specIOR[i]);
+			}
+		}
+#endif
 	}
 
 	if (m_bIsCapturedConvergedResultValid && m_pCapturedConvergedResult)
