@@ -1,0 +1,11 @@
+//	Ray Tracer Environment Setting File (Strict Format)	
+//	Cuda Ray Tracing Lab	
+//	Namo Podee	
+//	Ray Tracing Program for Experiment	
+//	1.0.0	
+//	Jul 11 2016	
+campos	87.0749	39.0572	-43.766	
+campitchyaw	4.32	-0.475	
+rttech	3	
+models	1	..\asset\model\test_prism.obj	
+materials	6	0	0	0	0.6	0.6	0.6	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	1	1	1	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	0.5	0.5	0.5	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	1	1	1	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	0.5	0.5	0.5	-1	100	100	100	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	1	1	1	-1	0	0	0	-1	0	-1	0	0	0	0.5	0	1	

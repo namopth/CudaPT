@@ -82,8 +82,9 @@ struct RTMaterial
 
 #ifdef FULLSPECTRAL
 	bool isChangeWavelength;
-	float glassPara[6];
 	float specPara[NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN];
+	bool isUseSpecIOR;
+	float specIOR[NPCudaSpecHelper::c_u32SampleN];
 #endif
 
 	RTMaterial() 
@@ -108,9 +109,10 @@ struct RTMaterial
 			uint32 horiPos = i - vertPos * NPCudaSpecHelper::c_u32SampleN;
 			specPara[i] = (vertPos == horiPos) ? 1.0f : 0.f;
 		}
-		for (uint32 i = 0; i < 6; i++)
+		isUseSpecIOR = false;
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
 		{
-			glassPara[i] = 1.0f;
+			specIOR[i] = 0.0f;
 		}
 #endif
 	}
@@ -130,9 +132,13 @@ struct RTMaterial
 		{
 			return false;
 		}
-		for (uint32 i = 0; i < 6; i++)
+		if (isUseSpecIOR != rhs.isUseSpecIOR)
 		{
-			if (glassPara[i] != rhs.glassPara[i])
+			return false;
+		}
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			if (specIOR[i] != rhs.specIOR[i])
 			{
 				return false;
 			}
@@ -159,10 +165,11 @@ struct RTMaterial
 			specPara[i] = rhs.specPara[i];
 		}
 		isChangeWavelength = rhs.isChangeWavelength;
-		for (uint32 i = 0; i < 6; i++)
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
 		{
-			glassPara[i] = rhs.glassPara[i];
+			specIOR[i] = rhs.specIOR[i];
 		}
+		isUseSpecIOR = rhs.isUseSpecIOR;
 #endif
 		diffuse = rhs.diffuse;
 		emissive = rhs.emissive;
@@ -233,6 +240,7 @@ public:
 #ifdef FULLSPECTRAL
 	bool BrowseSpecReflFile(float wavelengthMul = 1.0f, float powerMul = 1.0f);
 	bool BrowseBispecReflFile();
+	bool BrowseSpecIORFile(float wavelengthMul = 1.0f, float iorMul = 1.0f);
 #endif
 
 	std::vector<std::string> m_vLoadedModelPaths;

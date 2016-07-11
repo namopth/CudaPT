@@ -169,11 +169,13 @@ namespace cudaRTPTStreamSpec
 				if (refrProb > 0)
 				{
 					bool into = vecDot(nl, norm) > 0.f;
-					float wavelength = lambdaStart + (float)waveInd * ((float)lambdaEnd - (float)lambdaStart) / (float)specSampleN;
-					float sqMicWavelength = (0.001f * wavelength) * (0.001f * wavelength);
-					float nt = rsqrtf((mat->glassPara[0] * sqMicWavelength / (sqMicWavelength - mat->glassPara[3]))
-						+ (mat->glassPara[1] * sqMicWavelength / (sqMicWavelength - mat->glassPara[4]))
-						+ (mat->glassPara[2] * sqMicWavelength / (sqMicWavelength - mat->glassPara[5])) + 1.f);//specular * 0.8f + 1.f;
+					//float wavelength = lambdaStart + (float)waveInd * ((float)lambdaEnd - (float)lambdaStart) / (float)specSampleN;
+					//float sqMicWavelength = (0.001f * wavelength) * (0.001f * wavelength);
+					float nt = specular * 0.8f + 1.f;
+					if (mat->isUseSpecIOR)
+					{
+						nt = mat->specIOR[waveInd];
+					}
 					float nc = 1.0f;
 					float nnt = into ? nc / nt : nt / nc;
 					float ddn = vecDot(hDir, ray.dir);

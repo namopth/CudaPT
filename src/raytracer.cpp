@@ -331,6 +331,11 @@ void TW_CALL TwBrowseBispecReflFile(void* window)
 	((RTScene*)window)->BrowseBispecReflFile();
 }
 
+void TW_CALL TwBrowseSpecIORFile(void* window)
+{
+	((RTScene*)window)->BrowseSpecIORFile(1000.f,1.f);
+}
+
 bool RTScene::BrowseSpecReflFile(float wavelengthMul, float powerMul)
 {
 	if (m_iCurrentMaterialId < 0)
@@ -400,6 +405,64 @@ bool RTScene::BrowseBispecReflFile()
 	return false;
 }
 
+bool RTScene::BrowseSpecIORFile(float wavelengthMul, float iorMul)
+{
+	if (m_iCurrentMaterialId < 0)
+		return false;
+
+	bool isValid = false;
+	std::string file = NPOSHelper::BrowseOpenFile("All\0*.*\0Text\0*.TXT\0");
+	if (file.empty())
+		return false;
+
+	std::ifstream specFile(file);
+	if (specFile.is_open())
+	{
+		std::vector<float> specDataWavelength;
+		std::vector<float> specDataPower;
+		while (specFile.good())
+		{
+			std::string line;
+			if (!std::getline(specFile, line))
+				break;
+			std::istringstream sline(line);
+			float wavelength;
+			float power;
+			if (sline >> wavelength)
+			{
+				sline >> power;
+				specDataWavelength.push_back(wavelength*wavelengthMul);
+				specDataPower.push_back(power*iorMul);
+				//std::cout << "spectral data: " << wavelength * 1000.0f << ", " << power*0.01f << std::endl;
+			}
+		}
+
+		m_pMaterials[m_iCurrentMaterialId].isUseSpecIOR = true;
+
+		float lambdaInterval = (float)(NPCudaSpecHelper::c_u32LamdaEnd - NPCudaSpecHelper::c_u32LamdaStart)
+			/ (float)NPCudaSpecHelper::c_u32SampleN;
+		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
+		{
+			float matSpecPower = NPCudaSpecHelper::AverageSpectrum(specDataWavelength, specDataPower
+				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * i
+				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * (i + 1));
+			m_pMaterials[m_iCurrentMaterialId].specIOR[i] = matSpecPower;
+
+			//std::cout << "spectral ior data: " << i << ", " << matSpecPower << std::endl;
+		}
+		isValid = true;
+	}
+	specFile.close();
+
+	if (!isValid){
+		std::string message = "Cannot load file ";
+		message = message + file;
+		NPOSHelper::CreateMessageBox(message.c_str(), "Load Spectral IOR File Failure", NPOSHelper::MSGBOX_OK);
+		return false;
+	}
+	return isValid;
+}
+
 #endif
 
 void RTScene::SetTWMaterialBar(const int matId)
@@ -439,11 +502,8 @@ void RTScene::SetTWMaterialBar(const int matId)
 			, this, "label='Load Spectral Reflectivity' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadBiSpecRefl", TwBrowseBispecReflFile
 			, this, "label='Load Bispectral Reflectivity' group='Full Spectral'"));
-		for (uint32 j = 0; j < 6; j++)
-		{
-			ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("GlassPara" + std::to_string(j) + matName).c_str()
-				, TW_TYPE_FLOAT, &m_pMaterials[i].glassPara[j], "group='Full Spectral'"));
-		}
+		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecIOR", TwBrowseSpecIORFile
+			, this, "label='Load Spectral IOR' group='Full Spectral'"));
 #endif
 	}
 }
