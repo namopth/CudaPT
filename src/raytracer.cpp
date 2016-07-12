@@ -504,6 +504,9 @@ void RTScene::SetTWMaterialBar(const int matId)
 			, this, "label='Load Bispectral Reflectivity' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecIOR", TwBrowseSpecIORFile
 			, this, "label='Load Spectral IOR' group='Full Spectral'"));
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("Emission Directivity" + matName).c_str()
+			, TW_TYPE_FLOAT, &m_pMaterials[i].directivity
+			, "label='Emissive Directivity' group='Full Spectral'"));
 #endif
 	}
 }

@@ -81,6 +81,7 @@ struct RTMaterial
 	float clearcoatGloss;
 
 #ifdef FULLSPECTRAL
+	float directivity;
 	bool isChangeWavelength;
 	float specPara[NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN];
 	bool isUseSpecIOR;
@@ -103,6 +104,7 @@ struct RTMaterial
 		, clearcoatGloss(0.f)
 	{
 #ifdef FULLSPECTRAL
+		directivity = 0.f;
 		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN * NPCudaSpecHelper::c_u32SampleN; i++)
 		{
 			uint32 vertPos = i / NPCudaSpecHelper::c_u32SampleN;
@@ -136,6 +138,10 @@ struct RTMaterial
 		{
 			return false;
 		}
+		if (directivity != rhs.directivity)
+		{
+			return false;
+		}
 		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
 		{
 			if (specIOR[i] != rhs.specIOR[i])
@@ -160,6 +166,7 @@ struct RTMaterial
 	void operator=(const RTMaterial& rhs)
 	{
 #ifdef FULLSPECTRAL
+		directivity = rhs.directivity;
 		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN*NPCudaSpecHelper::c_u32SampleN; i++)
 		{
 			specPara[i] = rhs.specPara[i];

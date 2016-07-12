@@ -253,8 +253,7 @@ namespace cudaRTPTStreamSpec
 						nextRayType = RAYTYPE_DIFF;
 					}
 				}
-
-				procVertex->pathSample = (vecDot(nl, norm) < 0.f) ? procVertex->pathSample
+				procVertex->pathSample = (vecDot(nl, norm) < 0.f || vecDot(nl, -1 * ray.dir) < mat->directivity) ? procVertex->pathSample
 					: procVertex->pathSample + (vecMul(emissive, procVertex->pathOutMulTerm)).x;
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
