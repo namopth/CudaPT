@@ -252,12 +252,12 @@ void updateLightTriCudaMem(RTScene* scene)
 					float nnt = into ? nc / nt : nt / nc;
 					float ddn = vecDot(hDir, ray.dir);
 					float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
-					if (cos2t < 0.f)
-					{
-						reflProb = 1.0f;
-						//refrProb = 0.f;
-					}
-					else
+					//if (cos2t < 0.f)
+					//{
+					//	reflProb = 1.0f;
+					//	//refrProb = 0.f;
+					//}
+					//else
 					{
 						refrDir = normalize(ray.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
 					}
@@ -327,11 +327,13 @@ void updateLightTriCudaMem(RTScene* scene)
 					}
 				}
 
+				if (vecDot(nextRay.dir, nl) < 0.f) 
+					lightVertices[curLightVerticesSize + x].norm = -1 * lightVertices[curLightVerticesSize + x].norm;
 				procVertex->pathSample = emissive + vecMul(procVertex->pathSample, lightMulTerm);
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
 					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
@@ -419,12 +421,12 @@ void updateLightTriCudaMem(RTScene* scene)
 					float nnt = into ? nc / nt : nt / nc;
 					float ddn = vecDot(hDir, ray.dir);
 					float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
-					if (cos2t < 0.f)
-					{
-						//refrProb = 0.f;
-						reflProb = 1.0f;
-					}
-					else
+					//if (cos2t < 0.f)
+					//{
+					//	//refrProb = 0.f;
+					//	reflProb = 1.0f;
+					//}
+					//else
 					{
 						refrDir = normalize(ray.dir * nnt - hDir * (ddn*nnt + sqrtf(cos2t)));
 					}
@@ -507,7 +509,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
 					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
