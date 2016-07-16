@@ -332,6 +332,8 @@ void updateLightTriCudaMem(RTScene* scene)
 					}
 				}
 
+				if (nextRayType != RAYTYPE_DIFF)
+					lightVertices[curLightVerticesSize + x].irrad = make_float3(0.f, 0.f, 0.f);
 				//if (vecDot(nextRay.dir, nl) < 0.f) 
 				//	lightVertices[curLightVerticesSize + x].norm = -1 * lightVertices[curLightVerticesSize + x].norm;
 				procVertex->pathSample = emissive + vecMul(procVertex->pathSample, lightMulTerm);
@@ -645,7 +647,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	{
 		float3 modLightOutDir = lightOutDir;
 		float2 modDiffSpec = diffspec;
-		if (vecDot(norm, lightInDir) < 0.f && trans > 0.f)
+		if (vecDot(norm, lightOutDir) < 0.f && trans > 0.f)
 		{
 			bool into = vecDot(norm, surfaceNorm) > 0.f;
 			float nt = specular * 0.8f + 1.f;
@@ -657,14 +659,9 @@ void updateLightTriCudaMem(RTScene* scene)
 			modDiffSpec.y *= trans;
 			return make_float3(10.f, 0.f, 0.f);
 		}
-		else if (vecDot(norm, lightInDir) <= 0.f)
-		{
-			return make_float3(0.f, 0.f, 0.f);
-		}
 		else
 		{
 			modDiffSpec.y *= (1.f - trans);
-			return make_float3(0.f, 0.f, 0.f);
 		}
 
 		{
@@ -686,7 +683,8 @@ void updateLightTriCudaMem(RTScene* scene)
 		}
 	}
 
-	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, LightVertex* lightVertices, uint lightVerticesSize, curandState* randstate, float3& irrad, float3& irradDir)
+	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, float trans, LightVertex* lightVertices, uint lightVerticesSize
+		, curandState* randstate, float3& irrad, float3& irradDir)
 	{
 		//LightVertex dummy;
 		//dummy.diff = make_float3(1.f, 1.f, 1.f);
@@ -705,12 +703,13 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		CURay toLightVertex(pos, toLightVertexDir);
 		TracePrimitiveResult traceResult;
-		if (length(lightVertex->irrad) > 0.f && (vecDot(norm, toLightVertexDir) > 0.f || lightVertex->transparency > 0.f) &&
+		if (length(lightVertex->irrad) > 0.f && (vecDot(norm, toLightVertexDir) > 0.f || trans > 0.f) &&
 			!TracePrimitive(toLightVertex, traceResult, toLightVertexDist - M_FLT_BIAS_EPSILON, M_FLT_BIAS_EPSILON, false))
 		{
 			if (length(lightVertex->irradDir) > M_FLT_EPSILON)
 				irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
-				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f), lightVertex->transparency, lightVertex->surfaceNorm) + lightVertex->emissive;
+				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)
+				, lightVertex->transparency, lightVertex->surfaceNorm) + lightVertex->emissive;
 			else
 				irrad = lightVertex->irrad;
 			irrad = irrad;
@@ -727,7 +726,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		PTPathVertex* eyePath = eyeStream[ind];
 		float3 lightFromLightVertex = make_float3(0.f, 0.f, 0.f);
 		float3 toLightVertexDir = make_float3(0.f, 0.f, 0.f);
-		GetLightFromRandLightVertices(eyePath->pathVertexPos + eyePath->origNorm * M_FLT_BIAS_EPSILON, eyePath->origNorm
+		GetLightFromRandLightVertices(eyePath->pathVertexPos + eyePath->origNorm * M_FLT_BIAS_EPSILON, eyePath->origNorm, eyePath->origTrans
 			, lightVertices, lightVerticesSize, &eyePath->randState, lightFromLightVertex, toLightVertexDir);
 		float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
 			, GetShadingResult(eyePath->pathInDir, toLightVertexDir, lightFromLightVertex, eyePath->origNorm
