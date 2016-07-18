@@ -20,7 +20,6 @@ namespace cudaRTBDPTStream
 	{
 		float3 pos;
 		float3 norm;
-		float3 surfaceNorm;
 		float3 irrad;
 		float3 irradDir;
 
@@ -29,11 +28,10 @@ namespace cudaRTBDPTStream
 		float specular;
 		float metallic;
 		float roughness;
-		float transparency;
 
 		__hd__ LightVertex()
 		{
-			pos = norm = irrad = irradDir = surfaceNorm = make_float3(0.f, 0.f, 0.f);
+			pos = norm = irrad = irradDir = make_float3(0.f, 0.f, 0.f);
 		}
 	};
 
@@ -104,7 +102,6 @@ void updateLightTriCudaMem(RTScene* scene)
 		float3 pathInMulTerm;
 		float3 pathInDir;
 		float3 origNorm;
-		float3 origSurfaceNorm;
 		float3 origDiff;
 		float origMetallic;
 		float origRoughness;
@@ -222,14 +219,12 @@ void updateLightTriCudaMem(RTScene* scene)
 			lightVertices[curLightVerticesSize + x].irrad = procVertex->pathSample;
 			lightVertices[curLightVerticesSize + x].irradDir = -1 * ray.dir;
 			lightVertices[curLightVerticesSize + x].norm = nl;
-			lightVertices[curLightVerticesSize + x].surfaceNorm = norm;
 			lightVertices[curLightVerticesSize + x].pos = triPos;
 			lightVertices[curLightVerticesSize + x].diff = diff;
 			lightVertices[curLightVerticesSize + x].emissive = emissive;
 			lightVertices[curLightVerticesSize + x].specular = specular;
 			lightVertices[curLightVerticesSize + x].metallic = metallic;
 			lightVertices[curLightVerticesSize + x].roughness = roughness;
-			lightVertices[curLightVerticesSize + x].transparency = trans;
 			{
 				// Get some random microfacet
 				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);
@@ -334,8 +329,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				if (nextRayType != RAYTYPE_DIFF)
 					lightVertices[curLightVerticesSize + x].irrad = make_float3(0.f, 0.f, 0.f);
-				//if (vecDot(nextRay.dir, nl) < 0.f) 
-				//	lightVertices[curLightVerticesSize + x].norm = -1 * lightVertices[curLightVerticesSize + x].norm;
+
 				procVertex->pathSample = emissive + vecMul(procVertex->pathSample, lightMulTerm);
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
@@ -508,7 +502,6 @@ void updateLightTriCudaMem(RTScene* scene)
 				procVertex->origDiff = diff;
 				procVertex->pathInDir = -1 * ray.dir;
 				procVertex->origNorm = nl;
-				procVertex->origSurfaceNorm = norm;
 				procVertex->origRoughness = roughness;
 				procVertex->origMetallic = metallic;
 				procVertex->origSpecular = specular;
@@ -517,7 +510,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
 					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
@@ -643,44 +636,26 @@ void updateLightTriCudaMem(RTScene* scene)
 	}
 
 	__device__ float3 GetShadingResult(const float3& lightOutDir, const float3& lightInDir, const float3& lightInIrrad, const float3& norm,
-		const float3& diff, const float metallic, const float roughness, const float specular, const float2 diffspec, float trans, const float3& surfaceNorm)
+		const float3& diff, const float metallic, const float roughness, const float specular, const float2 diffspec)
 	{
-		float3 modLightOutDir = lightOutDir;
-		float2 modDiffSpec = diffspec;
-		if (vecDot(norm, lightOutDir) < 0.f && trans > 0.f)
-		{
-			bool into = vecDot(norm, surfaceNorm) > 0.f;
-			float nt = specular * 0.8f + 1.f;
-			float nc = 1.0f;
-			float nnt = !into ? nc / nt : nt / nc;
-			float ddn = vecDot(norm, lightOutDir);
-			float cos2t = 1.f - nnt * nnt *(1.f - ddn * ddn);
-			modLightOutDir = normalize(lightOutDir * nnt - norm * (ddn*nnt + sqrtf(cos2t)));
-			modDiffSpec.y *= trans;
-			return make_float3(10.f, 0.f, 0.f);
-		}
-		else
-		{
-			modDiffSpec.y *= (1.f - trans);
-		}
+		if (vecDot(norm, lightInDir) <= 0.f)
+			return make_float3(0.f, 0.f, 0.f);
 
-		{
-			float3 h = normalize(modLightOutDir + lightInDir);
+		float3 h = normalize(lightOutDir + lightInDir);
 
-			float voH = vecDot(modLightOutDir, h);
-			float noV = vecDot(norm, modLightOutDir);
-			float noH = vecDot(norm, h);
-			float noL = vecDot(norm, lightInDir);
-			float3 f0 = vecLerp(0.08f * specular * make_float3(1.f, 1.f, 1.f), diff, metallic);
-			float3 brdf_f = Fresnel(f0, voH);
-			//float g = GeometricVisibility(roughness, noV, noL, voH);
-			float d = D_GGX(roughness, noH);
-			float v = Vis_SmithJointApprox(roughness, noV, noL);
-			// Microfacet specular = D*G*F / (4*NoL*NoV)
-			float3 specIrrad = d*v*brdf_f;// vecMul(d*g*brdf_f / (4.f * noV), lightInIrrad);
-			float3 diffIrrad = vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), Diffuse(diff, roughness, noV, noL, voH));//vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), diff / M_PI);
-			return vecMul(lightInIrrad*noL, modDiffSpec.y*specIrrad + modDiffSpec.x*diffIrrad);
-		}
+		float voH = vecDot(lightOutDir, h);
+		float noV = vecDot(norm, lightOutDir);
+		float noH = vecDot(norm, h);
+		float noL = vecDot(norm, lightInDir);
+		float3 f0 = vecLerp(0.08f * specular * make_float3(1.f, 1.f, 1.f), diff, metallic);
+		float3 brdf_f = Fresnel(f0, voH);
+		//float g = GeometricVisibility(roughness, noV, noL, voH);
+		float d = D_GGX(roughness, noH);
+		float v = Vis_SmithJointApprox(roughness, noV, noL);
+		// Microfacet specular = D*G*F / (4*NoL*NoV)
+		float3 specIrrad = d*v*brdf_f;// vecMul(d*g*brdf_f / (4.f * noV), lightInIrrad);
+		float3 diffIrrad = vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), Diffuse(diff, roughness, noV, noL, voH));//vecMul((make_float3(1.f, 1.f, 1.f) - brdf_f), diff / M_PI);
+		return vecMul(lightInIrrad*noL, diffspec.y*specIrrad + diffspec.x*diffIrrad);
 	}
 
 	__device__ void  GetLightFromRandLightVertices(float3 pos, float3 norm, float trans, LightVertex* lightVertices, uint lightVerticesSize
@@ -703,13 +678,12 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		CURay toLightVertex(pos, toLightVertexDir);
 		TracePrimitiveResult traceResult;
-		if (length(lightVertex->irrad) > 0.f && (vecDot(norm, toLightVertexDir) > 0.f || trans > 0.f) &&
+		if (length(lightVertex->irrad) > 0.f && vecDot(norm, toLightVertexDir) > 0.f &&
 			!TracePrimitive(toLightVertex, traceResult, toLightVertexDist - M_FLT_BIAS_EPSILON, M_FLT_BIAS_EPSILON, false))
 		{
 			if (length(lightVertex->irradDir) > M_FLT_EPSILON)
 				irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
-				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)
-				, lightVertex->transparency, lightVertex->surfaceNorm) + lightVertex->emissive;
+				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
 			else
 				irrad = lightVertex->irrad;
 			irrad = irrad;
@@ -731,7 +705,7 @@ void updateLightTriCudaMem(RTScene* scene)
 		float3 lightContribFromLightVertex = vecMax(make_float3(0.f, 0.f, 0.f)
 			, GetShadingResult(eyePath->pathInDir, toLightVertexDir, lightFromLightVertex, eyePath->origNorm
 			, eyePath->origDiff, eyePath->origMetallic, eyePath->origRoughness, eyePath->origSpecular
-			, make_float2(1.f, 1.f), eyePath->origTrans, eyePath->origSurfaceNorm));
+			, make_float2(1.f - eyePath->origTrans, 1.f)));
 
 		if (length(lightContribFromLightVertex) > 0.f)
 		{
