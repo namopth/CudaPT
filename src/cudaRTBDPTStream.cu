@@ -4,7 +4,7 @@
 #include <thrust/execution_policy.h>
 
 #define BLOCK_SIZE 16
-#define NORMALRAY_BOUND_MAX 2
+#define NORMALRAY_BOUND_MAX 5
 #define PATHSTREAM_SIZE 1E4*64
 
 #define LIGHTRAY_BOUND_MAX 5
@@ -227,7 +227,8 @@ void updateLightTriCudaMem(RTScene* scene)
 			lightVertices[curLightVerticesSize + x].roughness = roughness;
 			{
 				// Get some random microfacet
-				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState), curand_uniform(&procVertex->randState)), roughness, nl);
+				float3 hDir = ImportanceSampleGGX(make_float2(curand_uniform(&procVertex->randState)
+					, curand_uniform(&procVertex->randState)), roughness, nl);
 
 				// Calculate flesnel
 				float voH = vecDot(-1 * ray.dir, hDir);
@@ -329,6 +330,9 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				if (nextRayType != RAYTYPE_DIFF)
 					lightVertices[curLightVerticesSize + x].irrad = make_float3(0.f, 0.f, 0.f);
+
+				if (vecDot(nextRay.dir, nl) < 0.f) 
+					lightVertices[curLightVerticesSize + x].norm = -1 * lightVertices[curLightVerticesSize + x].norm;
 
 				procVertex->pathSample = emissive + vecMul(procVertex->pathSample, lightMulTerm);
 
@@ -510,7 +514,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
+				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
 					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
@@ -681,13 +685,17 @@ void updateLightTriCudaMem(RTScene* scene)
 		if (length(lightVertex->irrad) > 0.f && vecDot(norm, toLightVertexDir) > 0.f &&
 			!TracePrimitive(toLightVertex, traceResult, toLightVertexDist - M_FLT_BIAS_EPSILON, M_FLT_BIAS_EPSILON, false))
 		{
-			if (length(lightVertex->irradDir) > M_FLT_EPSILON)
+			if (toLightVertexDist > M_FLT_EPSILON)
+			{
 				irrad = GetShadingResult(-1 * toLightVertexDir, lightVertex->irradDir, lightVertex->irrad, lightVertex->norm
-				, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
+					, lightVertex->diff, lightVertex->metallic, lightVertex->roughness, lightVertex->specular, make_float2(1.f, 1.f)) + lightVertex->emissive;
+				irradDir = toLightVertexDir;
+			}
 			else
+			{
 				irrad = lightVertex->irrad;
-			irrad = irrad;
-			irradDir = toLightVertexDir;
+				irradDir = -1.f * lightVertex->irradDir;
+			}
 		}
 	}
 
