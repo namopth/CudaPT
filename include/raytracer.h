@@ -24,7 +24,7 @@ DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
-#define FULLSPECTRAL
+//#define FULLSPECTRAL
 #include "mathhelper.h"
 #include "rayhelper.h"
 #include "bvhhelper.h"

@@ -621,6 +621,7 @@ void CUDAPTWindow::BrowseEnvSetting()
 				}
 			}
 		}
+#ifdef FULLSPECTRAL
 		else if (!varName.compare("materials_spec"))
 		{
 			uint32 size;
@@ -644,6 +645,7 @@ void CUDAPTWindow::BrowseEnvSetting()
 				}
 			}
 		}
+#endif
 		else if (!varName.compare("convergedresult"))
 		{
 			float* tempData = new float[m_iSizeH * m_iSizeW * 3];
