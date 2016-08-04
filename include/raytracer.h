@@ -17,6 +17,7 @@ DEFINE_RT(BDPTSC Bilaterial, cudaRTBDPTStreamBilat)
 //DEFINE_RT(BDPTSC Adap Bilat, cudaRTBDPTStreamAdapBilat)
 //DEFINE_RT(BDPTSC Adap Bilat Sort, cudaRTBDPTStreamAdapBilatSort)
 DEFINE_RT(BDPTSC Adap Bilat Binary, cudaRTBDPTStreamAdapBilatBinary)
+DEFINE_RT(BDPTSC Adap Bilat PLL, cudaRTBDPTStreamAdapBilatAtomic)
 DEFINE_RT(Cuda Debug, cudaRTDebug)
 DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #endif

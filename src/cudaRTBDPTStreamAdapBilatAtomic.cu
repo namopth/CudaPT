@@ -20,9 +20,9 @@
 
 #define PERFBREAKDOWN
 
-namespace cudaRTBDPTStreamAdapBilatBinary
+namespace cudaRTBDPTStreamAdapBilatAtomic
 {
-	const char* g_enumAdapModeName[] = {"PDF", "Const"};
+	const char* g_enumAdapModeName[] = { "PDF", "Const" };
 	NPAttrHelper::Attrib g_enumAdapMode("Adaptive Mode", g_enumAdapModeName, 2, 0);
 	NPAttrHelper::Attrib g_uiDesiredSamplingN("DesiredSamplingN", 5);
 	NPAttrHelper::Attrib g_fMinTraceProb("MinTraceProb", 0.f);
@@ -49,25 +49,25 @@ namespace cudaRTBDPTStreamAdapBilatBinary
 #else
 	CUDA_RT_COMMON_ATTRIBS_N(10)
 #endif
-	CUDA_RT_COMMON_ATTRIBS_BGN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredSamplingN)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Color EuD, g_fFilterColorEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Pos EuD, g_fFilterPosEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Norm EuD, g_fFilterNormEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(7, Filter Diff EuD, g_fFilterDiffEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(8, Filter Radius, g_uiFilterRadius)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(9, Filter Diffuse Flag, g_bFilterDiffuse)
+		CUDA_RT_COMMON_ATTRIBS_BGN
+		CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredSamplingN)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Color EuD, g_fFilterColorEuD)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Pos EuD, g_fFilterPosEuD)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Norm EuD, g_fFilterNormEuD)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(7, Filter Diff EuD, g_fFilterDiffEuD)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(8, Filter Radius, g_uiFilterRadius)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(9, Filter Diffuse Flag, g_bFilterDiffuse)
 #ifdef PERFBREAKDOWN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(10, Avg Filter Time, g_fAvgProcessTimeA)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(11, Avg MSE Time, g_fAvgProcessTimeB)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(12, Avg Gen Time, g_fAvgProcessTimeC)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(13, Avg Trace Time, g_fAvgProcessTimeD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(14, Avg Accum Time, g_fAvgProcessTimeE)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(10, Avg Filter Time, g_fAvgProcessTimeA)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(11, Avg MSE Time, g_fAvgProcessTimeB)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(12, Avg Gen Time, g_fAvgProcessTimeC)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(13, Avg Trace Time, g_fAvgProcessTimeD)
+		CUDA_RT_COMMON_ATTRIB_DECLARE(14, Avg Accum Time, g_fAvgProcessTimeE)
 #endif
-	CUDA_RT_COMMON_ATTRIBS_END
+		CUDA_RT_COMMON_ATTRIBS_END
 
 	struct LightVertex
 	{
@@ -110,27 +110,27 @@ namespace cudaRTBDPTStreamAdapBilatBinary
 		HANDLE_ERROR(cudaMemset((void*)g_devLightVertices, 0, sizeof(LightVertex) * LIGHTVERTEX_N));
 	}
 
-void updateLightTriCudaMem(RTScene* scene)
-{
-	g_lightTriN = 0;
-	CUFREE(g_devLightTri);
-	std::vector<uint> lightTri;
-	for (uint i = 0; i < scene->m_pTriangles.size(); i++)
+	void updateLightTriCudaMem(RTScene* scene)
 	{
-		if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
-			lightTri.push_back(i);
-	}
-	uint* tempLightTri = new uint[lightTri.size()];
-	for (uint i = 0; i < lightTri.size(); i++)
-	{
-		tempLightTri[i] = lightTri[i];
-	}
-	g_lightTriN = lightTri.size();
-	HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
-	HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
+		g_lightTriN = 0;
+		CUFREE(g_devLightTri);
+		std::vector<uint> lightTri;
+		for (uint i = 0; i < scene->m_pTriangles.size(); i++)
+		{
+			if (NPMathHelper::Vec3::length(scene->m_pMaterials[scene->m_pTriangles[i].matInd].emissive) > 0.f)
+				lightTri.push_back(i);
+		}
+		uint* tempLightTri = new uint[lightTri.size()];
+		for (uint i = 0; i < lightTri.size(); i++)
+		{
+			tempLightTri[i] = lightTri[i];
+		}
+		g_lightTriN = lightTri.size();
+		HANDLE_ERROR(cudaMalloc((void**)&g_devLightTri, sizeof(uint) * g_lightTriN));
+		HANDLE_ERROR(cudaMemcpy(g_devLightTri, tempLightTri, sizeof(uint) * g_lightTriN, cudaMemcpyHostToDevice));
 
-	DEL_ARRAY(tempLightTri);
-}
+		DEL_ARRAY(tempLightTri);
+	}
 
 	enum RAYTYPE
 	{
@@ -175,7 +175,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		__device__ PTPathVertex()
 			: isTerminated(true)
-			, pathPixel(make_uint2(0,0))
+			, pathPixel(make_uint2(0, 0))
 			, pathOutDir(make_float3(0.f, 1.f, 0.f))
 			, pathVertexPos(make_float3(0.f, 0.f, 0.f))
 			, pathOutMulTerm(make_float3(1.f, 1.f, 1.f))
@@ -623,7 +623,7 @@ void updateLightTriCudaMem(RTScene* scene)
 					}
 				}
 
-				procVertex->pathSample = procVertex->pathSample + vecMul(emissive , procVertex->pathOutMulTerm);
+				procVertex->pathSample = procVertex->pathSample + vecMul(emissive, procVertex->pathOutMulTerm);
 
 				procVertex->origDiff = diff;
 				procVertex->pathInDir = -1 * ray.dir;
@@ -768,7 +768,7 @@ void updateLightTriCudaMem(RTScene* scene)
 
 		float3 dir = normalize(camRight * au + camUp * av + camDir);
 
-		pathQueue[ind] = PTPathVertex(false, make_uint2(x,y), dir, camPos, RAYTYPE_EYE, randstate);
+		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
 	}
 
 	__global__ void pt_fillTempAdapPathQueue_kernel(uint* pathQueue, uint fillSize)
@@ -957,7 +957,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			}
 			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
 
-			float3 sampleResult = make_float3(1.f,1.f,1.f);
+			float3 sampleResult = make_float3(1.f, 1.f, 1.f);
 			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
 			float resultInf = 1.f / (float)(tempNextSampleResultN);
 			float oldInf = sampleResultN[ind] * resultInf;
@@ -1073,7 +1073,7 @@ void updateLightTriCudaMem(RTScene* scene)
 	{
 		__hd__ bool operator()(const uint& vert)
 		{
-			return (vert+1 == 0);
+			return (vert + 1 == 0);
 		}
 	};
 
@@ -1160,7 +1160,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			size_t mem_tot;
 			size_t mem_free;
 			cudaMemGetInfo(&mem_free, &mem_tot);
-			std::cout << "Memory Used : " << mem_tot-mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
+			std::cout << "Memory Used : " << mem_tot - mem_free << "/" << mem_tot << " -> Free " << mem_free << std::endl;
 		}
 		else if (scene->GetIsCudaMaterialDirty())
 		{
@@ -1310,8 +1310,8 @@ void updateLightTriCudaMem(RTScene* scene)
 #endif
 
 			// calculate sampling map from converged result
-			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> > 
-				(g_devFilteredResult, g_devResultData, g_devSampleResultN, *g_uiDesiredSamplingN.GetUint(),  g_devResultVarData, (uint)(width * height));
+			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >
+				(g_devFilteredResult, g_devResultData, g_devSampleResultN, *g_uiDesiredSamplingN.GetUint(), g_devResultVarData, (uint)(width * height));
 			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
 			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
 			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
@@ -1384,7 +1384,7 @@ void updateLightTriCudaMem(RTScene* scene)
 			}
 
 			// generate real path from temp path
-			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize/ (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize / (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
 
 #ifdef PERFBREAKDOWN

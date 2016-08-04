@@ -107,4 +107,6 @@ void freeAllBVHCudaMem();
 
 void initAllSceneCudaMem(RTScene* scene);
 void updateAllSceneMaterialsCudaMem(RTScene* scene);
+
+__device__ int atomicAggInc(int *ctr);
 #endif

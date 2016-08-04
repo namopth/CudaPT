@@ -597,3 +597,32 @@ void updateAllSceneMaterialsCudaMem(RTScene* scene)
 	DEL_ARRAY(tempMaterials);
 	scene->SetIsCudaMaterialDirty(false);
 }
+
+
+#define WARP_SZ 32
+#define MAX_NWARPS 32 
+
+__device__ inline int lane_id(void) { return threadIdx.x % WARP_SZ; }
+__device__ inline int warp_id(void) { return threadIdx.x / WARP_SZ; }
+
+__device__ int warp_bcast(int v, int leader)
+{
+#if __CUDA_CC__ >= 300
+	return __shfl(v, src);
+#else
+	volatile __shared__ int vs[MAX_NWARPS];
+	if (lane_id() == leader)
+		vs[warp_id()] = v;
+	return vs[warp_id()];
+#endif 
+}
+
+__device__ int atomicAggInc(int *ctr) {
+	int mask = __ballot(1);
+	int leader = __ffs(mask) - 1;
+	int res;
+	if (lane_id() == leader)
+		res = atomicAdd(ctr, __popc(mask));
+	res = warp_bcast(res, leader);
+	return res + __popc(mask & ((1 << lane_id()) - 1));
+}

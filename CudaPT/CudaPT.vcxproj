@@ -101,6 +101,9 @@
 copy /Y "$(SolutionDir)3rdParty\anttweakbar\lib\$(Configuration)\$(Platform)\AntTweakBar64.dll" "$(TargetDir)AntTweakBar64.dll"
 copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.dll"</Command>
     </PostBuildEvent>
+    <CudaCompile>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
+    </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -139,6 +142,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     </PostBuildEvent>
     <CudaCompile>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+      <CodeGeneration>compute_20,sm_20</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -196,6 +200,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <CudaCompile Include="..\src\cudaBilateralFilter.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatBinary.cu" />
+    <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatAtomic.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamBilat.cu" />
     <CudaCompile Include="..\src\cudaRTBVHDebug.cu" />
     <CudaCompile Include="..\src\cudaRTCommon.cu" />
