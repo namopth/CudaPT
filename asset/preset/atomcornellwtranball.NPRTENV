@@ -1,0 +1,11 @@
+//	Ray Tracer Environment Setting File (Strict Format)	
+//	Cuda Ray Tracing Lab	
+//	Namo Podee	
+//	Ray Tracing Program for Experiment	
+//	1.0.0	
+//	Aug  4 2016	
+campos	-1.82495	-2.40754	-2.74389	
+campitchyaw	-0.13	-0.215	
+rttech	6	
+models	1	..\asset\model\cornell_box_with_sphere.obj	
+materials	6	0	0	0	0.6	0.6	0.6	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	0	1	0	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	1	1	1	-1	20	20	20	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	1	0	0	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	0	0	0	0.5	0.5	0.5	-1	0	0	0	-1	0	-1	0	0	0	0.5	0	1	0	0	0	1	1	1	-1	0	0	0	-1	0	-1	0.5	0	0	0.5	0	0	

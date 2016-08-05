@@ -17,6 +17,7 @@
 
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
+#define PATHQUEUE_MUL 2
 
 #define PERFBREAKDOWN
 
@@ -228,6 +229,7 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		{}
 	};
 
+	uint* g_devAtomicN = nullptr;
 	uint* g_devTempPathQueue = nullptr;
 	PTPathVertex* g_devPathQueue = nullptr;
 	uint g_uPathQueueCur = 0;
@@ -243,28 +245,38 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		CUFREE(g_devPathQueue);
 		CUFREE(g_devPathStream);
 		CUFREE(g_devEyeLightConPathStream);
+		CUFREE(g_devAtomicN);
 	}
 
 	void allocateStreamMem(uint queueSize = 480000)
 	{
 		g_uPathQueueSize = queueSize;
-		HANDLE_ERROR(cudaMalloc((void**)&g_devPathQueue, sizeof(PTPathVertex) * g_uPathQueueSize));
-		HANDLE_ERROR(cudaMemset((void*)g_devPathQueue, 0, sizeof(PTPathVertex) * g_uPathQueueSize));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devPathQueue, sizeof(PTPathVertex) * g_uPathQueueSize * PATHQUEUE_MUL));
+		HANDLE_ERROR(cudaMemset((void*)g_devPathQueue, 0, sizeof(PTPathVertex) * g_uPathQueueSize * PATHQUEUE_MUL));
 
-		HANDLE_ERROR(cudaMalloc((void**)&g_devTempPathQueue, sizeof(uint) * g_uPathQueueSize * 2));
-		HANDLE_ERROR(cudaMemset((void*)g_devTempPathQueue, 0, sizeof(uint) * g_uPathQueueSize * 2));
+		HANDLE_ERROR(cudaMalloc((void**)&g_devTempPathQueue, sizeof(uint) * g_uPathQueueSize * PATHQUEUE_MUL));
+		HANDLE_ERROR(cudaMemset((void*)g_devTempPathQueue, 0, sizeof(uint) * g_uPathQueueSize * PATHQUEUE_MUL));
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_devPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
 
 		HANDLE_ERROR(cudaMalloc((void**)&g_devEyeLightConPathStream, sizeof(PTPathVertex*) * g_uPathStreamSize));
 		HANDLE_ERROR(cudaMemset((void*)g_devEyeLightConPathStream, 0, sizeof(PTPathVertex*) * g_uPathStreamSize));
+
+		HANDLE_ERROR(cudaMalloc((void**)&g_devAtomicN, sizeof(uint)));
+		HANDLE_ERROR(cudaMemset((void*)g_devAtomicN, 0, sizeof(uint)));
 	}
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;
 	float* g_devResultVarData = nullptr;
 	uint* g_devSampleResultN = nullptr;
+	float* g_devTempResultData = nullptr;
+	uint* g_devTempResultN = nullptr;
+
+	float* g_devTempPositionData = nullptr;
+	float* g_devTempNormalData = nullptr;
+	float* g_devTempDiffuseData = nullptr;
 
 	float* g_devPositionData = nullptr;
 	float* g_devNormalData = nullptr;
@@ -802,27 +814,31 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		}
 	}
 
-	__global__ void pt_convTempPathQueue_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
-		float width, float height, uint32 frameN, uint32 hashedFrameN, uint* tempPathQueue, uint tempPathQueueSize, PTPathVertex* pathQueue)
+	__global__ void pt_genAdapPathQueue_kernel(float3 camPos, float3 camDir, float3 camUp, float3 camRight, float fov,
+		float width, float height, uint32 frameN, uint32 hashedFrameN, uint* atomicN, float* mseData, float sumMSE, PTPathVertex* pathQueue, uint genSize)
 	{
 		uint ind = blockIdx.x * blockDim.x + threadIdx.x;
-		if (ind >= tempPathQueueSize) return;
+		if (ind >= width * height) return;
 
-		uint pathInd = tempPathQueue[ind];
-		uint y = pathInd / width;
-		uint x = pathInd - y * width;
+		uint y = ind / width;
+		uint x = ind - y * width;
 
 		float u = (2.f * ((float)x + 0.5f) / width - 1.f) * tan(fov * 0.5f) * width / height;
 		float v = (2.f * ((float)y + 0.5f) / height - 1.f) * tan(fov * 0.5f);
 
-		curandState randstate;
-		curand_init(hashedFrameN + ind, 0, 0, &randstate);
-		float au = u + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
-		float av = v + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+		
+		float mseRatio = mseData[ind] / sumMSE;
+		uint sampleN = genSize * mseRatio;
 
-		float3 dir = normalize(camRight * au + camUp * av + camDir);
-
-		pathQueue[ind] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
+		for (uint i = 0; i < sampleN; i++)
+		{
+			curandState randstate;
+			curand_init(hashedFrameN + ind + i * genSize, 0, 0, &randstate);
+			float au = u + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+			float av = v + (curand_uniform(&randstate) - 0.5f) / height * tan(fov * 0.5f);
+			float3 dir = normalize(camRight * au + camUp * av + camDir);
+			pathQueue[atomicAggInc((int *)atomicN)] = PTPathVertex(false, make_uint2(x, y), dir, camPos, RAYTYPE_EYE, randstate);
+		}
 	}
 
 	__device__ float3 GetShadingResult(const float3& lightOutDir, const float3& lightInDir, const float3& lightInIrrad, const float3& norm,
@@ -934,7 +950,8 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		result[ind * 3] = result[ind * 3 + 1] = result[ind * 3 + 2] = fmaxf(minProb, varResult[ind]);
 	}
 
-	__global__ void pt_debugTracedPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height, uint frameN, float* result, float* accResult, float* varResult, uint* sampleResultN)
+	__global__ void pt_debugTracedPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height
+		, float* tempResult, uint* tempResultN)
 	{
 		uint x = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -951,22 +968,16 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		if (pathQueue[x].pathSampleN > 0)
 		{
 			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
-			if (!frameN)
-			{
-				sampleResultN[ind] = 0;
-			}
-			uint tempNextSampleResultN = sampleResultN[ind] + pathQueue[x].pathSampleN;
+
+			uint tempNextSampleResultN = pathQueue[x].pathSampleN;
 
 			float3 sampleResult = make_float3(1.f, 1.f, 1.f);
 			float potentialResult = 1.f - pathQueue[x].pathAccumPotential;
-			float resultInf = 1.f / (float)(tempNextSampleResultN);
-			float oldInf = sampleResultN[ind] * resultInf;
 
-			result[ind * 3] = max(resultInf * sampleResult.x + oldInf * result[ind * 3], 0.f);
-			result[ind * 3 + 1] = max(resultInf * sampleResult.y + oldInf * result[ind * 3 + 1], 0.f);
-			result[ind * 3 + 2] = max(resultInf * sampleResult.z + oldInf * result[ind * 3 + 2], 0.f);
-			varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
-			sampleResultN[ind] = tempNextSampleResultN;
+			atomicAdd(tempResult + ind * 3, 1.f);
+			atomicAdd(tempResult + ind * 3 + 1, 1.f);
+			atomicAdd(tempResult + ind * 3 + 2, 1.f);
+			atomicAdd(tempResultN + ind, 1);
 		}
 	}
 
@@ -1027,6 +1038,107 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		}
 	}
 
+	__global__ void pt_atomicApplyPathQueueResult_kernel(PTPathVertex* pathQueue, uint pathQueueSize, uint width, uint height
+		, float* tempResult, uint* tempResultN, float* tempPos, float* tempNorm, float* tempDiff)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (x >= pathQueueSize) return;
+
+		// add calculating sample to the result
+		if (!pathQueue[x].isTerminated)
+		{
+			pathQueue[x].pathAccumSample = pathQueue[x].pathAccumSample + pathQueue[x].pathSample;
+			pathQueue[x].pathAccumPotential = pathQueue[x].pathAccumPotential + pathQueue[x].pathPotential;
+			pathQueue[x].pathSampleN++;
+		}
+
+		if (pathQueue[x].pathSampleN > 0)
+		{
+			uint ind = pathQueue[x].pathPixel.y * width + pathQueue[x].pathPixel.x;
+			
+			float3 sampleResult = pathQueue[x].pathAccumSample;
+			if (!isinf(sampleResult.x) && !isinf(sampleResult.y) && !isinf(sampleResult.z))
+			{
+				atomicAdd(tempResult + ind * 3, sampleResult.x);
+				atomicAdd(tempResult + ind * 3 + 1, sampleResult.y);
+				atomicAdd(tempResult + ind * 3 + 2, sampleResult.z);
+
+				atomicAdd(tempResultN + ind, pathQueue[x].pathSampleN);
+
+				sampleResult = pathQueue[x].pathDirectPos * pathQueue[x].pathSampleN;
+				atomicAdd(tempPos + ind * 3, sampleResult.x);
+				atomicAdd(tempPos + ind * 3 + 1, sampleResult.y);
+				atomicAdd(tempPos + ind * 3 + 2, sampleResult.z);
+
+				sampleResult = pathQueue[x].pathDirectNorm * pathQueue[x].pathSampleN;
+				atomicAdd(tempNorm + ind * 3, sampleResult.x);
+				atomicAdd(tempNorm + ind * 3 + 1, sampleResult.y);
+				atomicAdd(tempNorm + ind * 3 + 2, sampleResult.z);
+
+				sampleResult = pathQueue[x].pathDirectDiffuse * pathQueue[x].pathSampleN;
+				atomicAdd(tempDiff + ind * 3, sampleResult.x);
+				atomicAdd(tempDiff + ind * 3 + 1, sampleResult.y);
+				atomicAdd(tempDiff + ind * 3 + 2, sampleResult.z);
+			}
+		}
+	}
+
+
+	__global__ void pt_accumTempResultToResult_kernel(uint width, uint height, uint frameN, float* tempResult, uint* tempResultN
+		, float* tempPos, float* tempNorm, float* tempDiff, float* result, uint* resultN
+		, float* pos, float* norm, float* diff)
+	{
+		uint x = blockIdx.x * blockDim.x + threadIdx.x;
+
+		if (x >= width * height) return;
+
+		if (frameN == 0)
+		{
+			resultN[x] = 0;
+
+			result[x * 3] = 0.f;
+			result[x * 3 + 1] = 0.f;
+			result[x * 3 + 2] = 0.f;
+
+			pos[x * 3] = 0.f;
+			pos[x * 3 + 1] = 0.f;
+			pos[x * 3 + 2] = 0.f;
+
+			norm[x * 3] = 0.f;
+			norm[x * 3 + 1] = 0.f;
+			norm[x * 3 + 2] = 0.f;
+
+			diff[x * 3] = 0.f;
+			diff[x * 3 + 1] = 0.f;
+			diff[x * 3 + 2] = 0.f;
+		}
+
+		uint nextSampleN = tempResultN[x] + resultN[x];
+		if (nextSampleN > resultN[x])
+		{
+			float resultInf = 1.f / (float)(nextSampleN);
+			float oldInf = resultN[x] * resultInf;
+
+			result[x * 3] = max(resultInf * tempResult[x * 3] + oldInf * result[x * 3], 0.f);
+			result[x * 3 + 1] = max(resultInf * tempResult[x * 3 + 1] + oldInf * result[x * 3 + 1], 0.f);
+			result[x * 3 + 2] = max(resultInf * tempResult[x * 3 + 2] + oldInf * result[x * 3 + 2], 0.f);
+
+			resultN[x] = resultN[x] + tempResultN[x];
+
+			pos[x * 3] = resultInf * tempPos[x * 3] + oldInf * pos[x * 3];
+			pos[x * 3 + 1] = resultInf * tempPos[x * 3 + 1] + oldInf * pos[x * 3 + 1];
+			pos[x * 3 + 2] = resultInf * tempPos[x * 3 + 2] + oldInf * pos[x * 3 + 2];
+
+			norm[x * 3] = resultInf * tempNorm[x * 3] + oldInf * norm[x * 3];
+			norm[x * 3 + 1] = resultInf * tempNorm[x * 3 + 1] + oldInf * norm[x * 3 + 1];
+			norm[x * 3 + 2] = resultInf * tempNorm[x * 3 + 2] + oldInf * norm[x * 3 + 2];
+
+			diff[x * 3] = resultInf * tempDiff[x * 3] + oldInf * diff[x * 3];
+			diff[x * 3 + 1] = resultInf * tempDiff[x * 3 + 1] + oldInf * diff[x * 3 + 1];
+			diff[x * 3 + 2] = resultInf * tempDiff[x * 3 + 2] + oldInf * diff[x * 3 + 2];
+		}
+	}
 
 	__global__ void pt_calculateSquareError_kernel(float* correctData, float* sampleData, uint* sampleNData, uint sampleN, float* resultData, uint dataSize)
 	{
@@ -1048,15 +1160,20 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		freeLightPathMem();
 		freeStreamMem();
 		freeAllBVHCudaMem();
+		CUFREE(g_devTempResultN);
 		CUFREE(g_devSampleResultN);
 		CUFREE(g_devResultVarData);
 		CUFREE(g_devResultData);
 		CUFREE(g_devAccResultData);
+		CUFREE(g_devTempResultData);
 		CUFREE(g_devFilteredResult);
 		CUFREE(g_devFilterGaussianConst);
 		CUFREE(g_devPositionData);
 		CUFREE(g_devNormalData);
 		CUFREE(g_devDiffuseData);
+		CUFREE(g_devTempPositionData);
+		CUFREE(g_devTempNormalData);
+		CUFREE(g_devTempDiffuseData);
 	}
 
 	//struct ray_greater_compare
@@ -1172,23 +1289,33 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 		if (!g_bIsCudaInit)
 			return false;
 
-		if (!g_devResultData || !g_devAccResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devFilteredResult)
+		if (!g_devResultData || !g_devAccResultData || !g_devTempResultData || g_resultDataSize != (sizeof(float) * 3 * width * height) || !g_devFilteredResult)
 		{
 			g_resultDataSize = sizeof(float) * 3 * width * height;
 			CUFREE(g_devResultData);
 			cudaMalloc((void**)&g_devResultData, g_resultDataSize);
 			CUFREE(g_devAccResultData);
 			cudaMalloc((void**)&g_devAccResultData, g_resultDataSize);
+			CUFREE(g_devTempResultData);
+			cudaMalloc((void**)&g_devTempResultData, g_resultDataSize);
 			CUFREE(g_devPositionData);
 			cudaMalloc((void**)&g_devPositionData, g_resultDataSize);
 			CUFREE(g_devNormalData);
 			cudaMalloc((void**)&g_devNormalData, g_resultDataSize);
 			CUFREE(g_devDiffuseData);
 			cudaMalloc((void**)&g_devDiffuseData, g_resultDataSize);
+			CUFREE(g_devTempPositionData);
+			cudaMalloc((void**)&g_devTempPositionData, g_resultDataSize);
+			CUFREE(g_devTempNormalData);
+			cudaMalloc((void**)&g_devTempNormalData, g_resultDataSize);
+			CUFREE(g_devTempDiffuseData);
+			cudaMalloc((void**)&g_devTempDiffuseData, g_resultDataSize);
 			CUFREE(g_devResultVarData);
-			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height);
+			cudaMalloc((void**)&g_devResultVarData, sizeof(float) * width * height); 
 			CUFREE(g_devSampleResultN);
 			cudaMalloc((void**)&g_devSampleResultN, sizeof(uint) * width * height);
+			CUFREE(g_devTempResultN);
+			cudaMalloc((void**)&g_devTempResultN, sizeof(uint) * width * height);
 			CUFREE(g_devFilteredResult);
 			cudaMalloc((void**)&g_devFilteredResult, g_resultDataSize);
 		}
@@ -1270,7 +1397,8 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 
 			//HANDLE_ERROR(cudaEventRecord(start, 0));
 			pt_applyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
-				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devPositionData, g_devNormalData, g_devDiffuseData, g_devSampleResultN);
+				(g_devPathQueue, useQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData
+				, g_devPositionData, g_devNormalData, g_devDiffuseData, g_devSampleResultN);
 			//HANDLE_ERROR(cudaEventRecord(stop, 0));
 			//HANDLE_ERROR(cudaEventSynchronize(stop));
 			//HANDLE_ERROR(cudaEventElapsedTime(&time, start, stop));
@@ -1313,9 +1441,10 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 			pt_calculateSquareError_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >
 				(g_devFilteredResult, g_devResultData, g_devSampleResultN, *g_uiDesiredSamplingN.GetUint(), g_devResultVarData, (uint)(width * height));
 			//thrust::sort(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height));
-			//float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
-			float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
+			float sumMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::plus<float>());
+			//float maxMSE = thrust::reduce(thrust::device, g_devResultVarData, g_devResultVarData + (uint)(width * height), 0.f, thrust::maximum<float>());
 			//float meanMSE = sumMSE / (width * height);
+			//std::cout << "sumMSE: " << sumMSE << "\n";
 			//std::cout << "maxMSE: " << maxMSE << "\n";
 			//std::cout << "meanMSE: " << meanMSE << "\n";
 
@@ -1345,48 +1474,14 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 			HANDLE_ERROR(cudaEventRecord(start, 0));
 #endif
 			// gen adaptive eye paths
-			std::vector<uint> pathQueuesSize;
-			uint accumPathQueueSize = 0;
-			uint genSize = width * height;
-			//uint debugLoopTime = 0;
-			float leftWindow = 0.f;
-			float rightWindow = maxMSE * 2.f;
-			float desiredGenSize = width * height / (float)*g_uiDesiredSamplingN.GetUint();
-			while (accumPathQueueSize < genSize)
-			{
-				// generate path into temp path
-				float middleWindow = (leftWindow + rightWindow) * 0.5f;
-				pt_genTempAdapPathQueue_kernel << < renderGrid, block2 >> > (width, height
-					, WangHash(g_uCurFrameN), accumPathQueueSize, g_devResultVarData, g_devTempPathQueue + accumPathQueueSize
-					, *g_fMinTraceProb.GetFloat(), middleWindow);
-				uint* pathQueueEndItr = thrust::remove_if(thrust::device, g_devTempPathQueue + accumPathQueueSize
-					, g_devTempPathQueue + accumPathQueueSize + genSize, is_temppathqueue_terminated());
-				uint compactedGenSize = min(genSize - accumPathQueueSize, (uint)(pathQueueEndItr - (g_devTempPathQueue + accumPathQueueSize)));
-				pathQueuesSize.push_back(compactedGenSize);
-				accumPathQueueSize += compactedGenSize;
-				if (compactedGenSize == 0) break;
-				if (compactedGenSize < desiredGenSize)
-					rightWindow = middleWindow;
-				else if (compactedGenSize > desiredGenSize)
-					leftWindow = middleWindow;
-				//std::cout << "Gened: " << compactedGenSize << std::endl << "Accum: " << accumPathQueueSize << std::endl;
-				//debugLoopTime++;
-			}
-			//std::cout << "Debug Loop Time: " << debugLoopTime << "\n";
+			uint useQueueSize = width * height * PATHQUEUE_MUL;
+			HANDLE_ERROR(cudaMemset((void*)g_devAtomicN, 0, sizeof(uint)));
 
-			// fill temp path
-			int unfilledPathQueueSize = genSize - accumPathQueueSize;
-			if (unfilledPathQueueSize > 0)
-			{
-				pt_fillTempAdapPathQueue_kernel << < dim3(ceil((float)unfilledPathQueueSize / (float)block1.x), 1, 1), block1 >> > (g_devTempPathQueue + accumPathQueueSize, unfilledPathQueueSize);
-				pathQueuesSize.push_back(unfilledPathQueueSize);
-				accumPathQueueSize += unfilledPathQueueSize;
-			}
-
-			// generate real path from temp path
-			pt_convTempPathQueue_kernel << < dim3(ceil((float)accumPathQueueSize / (float)block1.x), 1, 1), block1 >> > (f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
-				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devTempPathQueue, accumPathQueueSize, g_devPathQueue);
-
+			pt_genAdapPathQueue_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >
+				(f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
+				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devAtomicN, g_devResultVarData, sumMSE, g_devPathQueue, useQueueSize);
+			cudaMemcpy(&useQueueSize, g_devAtomicN, sizeof(uint), cudaMemcpyDeviceToHost);
+			std::cout << "AtomicN : " << useQueueSize << std::endl;
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(stop, 0));
 			HANDLE_ERROR(cudaEventSynchronize(stop));
@@ -1399,7 +1494,7 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(start, 0));
 #endif
-			TracePathQueue(genSize);
+			TracePathQueue(useQueueSize);
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(stop, 0));
 			HANDLE_ERROR(cudaEventSynchronize(stop));
@@ -1411,22 +1506,27 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(start, 0));
 #endif
-			accumPathQueueSize = 0;
-			for (auto pathQueueSize : pathQueuesSize)
+			HANDLE_ERROR(cudaMemset((void*)g_devTempResultData, 0, sizeof(float) * 3 * height * width));
+			HANDLE_ERROR(cudaMemset((void*)g_devTempPositionData, 0, sizeof(float) * 3 * height * width));
+			HANDLE_ERROR(cudaMemset((void*)g_devTempNormalData, 0, sizeof(float) * 3 * height * width));
+			HANDLE_ERROR(cudaMemset((void*)g_devTempDiffuseData, 0, sizeof(float) * 3 * height * width));
+			HANDLE_ERROR(cudaMemset((void*)g_devTempResultN, 0, sizeof(uint) * height * width));
+			if (*g_enumDebugMode.GetUint() == 1)
 			{
-				if (*g_enumDebugMode.GetUint() == 1)
-				{
-					pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData, g_devSampleResultN);
-				}
-				else
-				{
-					pt_applyPathQueueResult_kernel << < dim3(ceil((float)pathQueueSize / (float)block1.x), 1, 1), block1 >> >
-						(g_devPathQueue + accumPathQueueSize, pathQueueSize, width, height, g_uCurFrameN, g_devResultData, g_devAccResultData, g_devResultVarData
-						, g_devPositionData, g_devNormalData, g_devDiffuseData, g_devSampleResultN);
-				}
-				accumPathQueueSize += pathQueueSize;
+				pt_debugTracedPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
+					(g_devPathQueue, useQueueSize, width, height, g_devTempResultData, g_devTempResultN);
 			}
+			else
+			{
+				pt_atomicApplyPathQueueResult_kernel << < dim3(ceil((float)useQueueSize / (float)block1.x), 1, 1), block1 >> >
+					(g_devPathQueue, useQueueSize, width, height, g_devTempResultData, g_devTempResultN
+					, g_devTempPositionData, g_devTempNormalData, g_devTempDiffuseData);
+			}
+
+			pt_accumTempResultToResult_kernel << < dim3(ceil((float)(width * height) / (float)block1.x), 1, 1), block1 >> >
+				(width, height, g_uCurFrameN, g_devTempResultData, g_devTempResultN
+				, g_devTempPositionData, g_devTempNormalData, g_devTempDiffuseData
+				, g_devResultData, g_devSampleResultN, g_devPositionData, g_devNormalData, g_devDiffuseData);
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(stop, 0));
 			HANDLE_ERROR(cudaEventSynchronize(stop));
