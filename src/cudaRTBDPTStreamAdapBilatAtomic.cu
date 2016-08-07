@@ -17,7 +17,7 @@
 
 #define LIGHTRAY_BOUND_MAX 5
 #define LIGHTVERTEX_N 640
-#define PATHQUEUE_MUL 2
+#define PATHQUEUE_MUL 1
 
 #define PERFBREAKDOWN
 
@@ -540,7 +540,7 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 				// PDF
 				float NoH = vecDot(nl, hDir);
 				float VoH = vecDot(-1 * ray.dir, hDir);
-				float pdf = D_GGX(roughness, NoH) * NoH / (4.f * VoH);
+				float pdf = D_GGX(roughness, NoH) * NoH / (4.f * VoH + M_EPSILON);
 
 				// Reflected or Refracted
 				float reflProb = lerp(length(brdf_f), 1.0f, metallic);
@@ -580,7 +580,7 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 				// Reflected
 				if (ProbabilityRand(&procVertex->randState, reflProb))
 				{
-					nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir, reflDir);
+					nextRay = CURay(ray.orig + (traceResult.dist - M_FLT_BIAS_EPSILON) * ray.dir + reflDir * M_FLT_BIAS_EPSILON, reflDir);
 					// ShootRayResult nextRayResult = pt0_normalRay<depth + 1>(nextRay, vertices, triangles, materials, textures, randstate);
 
 					// Microfacet specular = D*G*F / (4*NoL*NoV)
@@ -1019,20 +1019,20 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 					varResult[ind] = max(resultInf * potentialResult + oldInf * varResult[ind], 0.f);
 					sampleResultN[ind] = tempNextSampleResultN;
 
-					sampleResult = pathQueue[x].pathDirectPos;
-					posResult[ind * 3] = sampleResult.x;
-					posResult[ind * 3 + 1] = sampleResult.y;
-					posResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectPos * pathQueue[x].pathSampleN;
+					posResult[ind * 3] = resultInf * sampleResult.x + oldInf *posResult[ind * 3];
+					posResult[ind * 3 + 1] = resultInf * sampleResult.y + oldInf *posResult[ind * 3 + 1];
+					posResult[ind * 3 + 2] = resultInf * sampleResult.z + oldInf *posResult[ind * 3 + 2];
 
-					sampleResult = pathQueue[x].pathDirectNorm;
-					normResult[ind * 3] = sampleResult.x;
-					normResult[ind * 3 + 1] = sampleResult.y;
-					normResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectNorm * pathQueue[x].pathSampleN;
+					normResult[ind * 3] = resultInf * sampleResult.x + oldInf *normResult[ind * 3];
+					normResult[ind * 3 + 1] = resultInf * sampleResult.y + oldInf *normResult[ind * 3 + 1];
+					normResult[ind * 3 + 2] = resultInf * sampleResult.z + oldInf *normResult[ind * 3 + 2];
 
-					sampleResult = pathQueue[x].pathDirectDiffuse;
-					diffResult[ind * 3] = sampleResult.x;
-					diffResult[ind * 3 + 1] = sampleResult.y;
-					diffResult[ind * 3 + 2] = sampleResult.z;
+					sampleResult = pathQueue[x].pathDirectDiffuse * pathQueue[x].pathSampleN;
+					diffResult[ind * 3] = resultInf * sampleResult.x + oldInf *diffResult[ind * 3];
+					diffResult[ind * 3 + 1] = resultInf * sampleResult.y + oldInf *diffResult[ind * 3 + 1];
+					diffResult[ind * 3 + 2] = resultInf * sampleResult.z + oldInf *diffResult[ind * 3 + 2];
 				}
 			}
 		}
@@ -1481,7 +1481,7 @@ namespace cudaRTBDPTStreamAdapBilatAtomic
 				(f3CamPos, f3CamDir, f3CamUp, f3CamRight, fov, width, height
 				, g_uCurFrameN, WangHash(g_uCurFrameN), g_devAtomicN, g_devResultVarData, sumMSE, g_devPathQueue, useQueueSize);
 			cudaMemcpy(&useQueueSize, g_devAtomicN, sizeof(uint), cudaMemcpyDeviceToHost);
-			std::cout << "AtomicN : " << useQueueSize << std::endl;
+			//std::cout << "AtomicN : " << useQueueSize << std::endl;
 #ifdef PERFBREAKDOWN
 			HANDLE_ERROR(cudaEventRecord(stop, 0));
 			HANDLE_ERROR(cudaEventSynchronize(stop));
