@@ -207,5 +207,8 @@
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatAtomic.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTBDPTAtomicAdapBilatAtomic.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>
