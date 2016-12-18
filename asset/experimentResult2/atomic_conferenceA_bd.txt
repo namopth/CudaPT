@@ -1,0 +1,10 @@
+filter time	10.8577
+MSE time	0.223447
+Gen time	45.9855
+Trace time	55.5525
+Accum Time	1.74857
+Pos EuD		1
+Norm		0.25
+Diff EuD	0.1
+Radius		5
+Diff		false
