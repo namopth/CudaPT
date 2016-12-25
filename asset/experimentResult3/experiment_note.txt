@@ -1,0 +1,8 @@
+conference filter parameters:
+max samp 10
+color 50
+pos 50
+norm 0.25
+diff 0.1
+rad 5
+no diff

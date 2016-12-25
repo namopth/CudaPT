@@ -274,6 +274,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
   <ItemGroup>
     <CudaCompile Include="..\src\cudaBilateralFilter.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTAtomicAdapBilatAtomic.cu" />
+    <CudaCompile Include="..\src\cudaRTBDPTRegen.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStream.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatBinary.cu" />
     <CudaCompile Include="..\src\cudaRTBDPTStreamAdapBilatAtomic.cu" />

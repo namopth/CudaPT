@@ -7,7 +7,7 @@ DEFINE_RT(PTSC, cudaRTPTStream)
 DEFINE_RT(PTSCSpec, cudaRTPTStreamSpec)
 #endif
 //DEFINE_RT(PTSCRegen, cudaRTPTStreamRegen)
-//DEFINE_RT(BDPTRegen, cudaRTBDPTRegen)
+DEFINE_RT(BDPTRegen, cudaRTBDPTRegen)
 DEFINE_RT(BDPTSC, cudaRTBDPTStream)
 DEFINE_RT(BDPTSC Bilaterial, cudaRTBDPTStreamBilat)
 //DEFINE_RT(BDPTSC Adap PDF, cudaRTBDPTStreamAdapPDF)
