@@ -571,7 +571,7 @@ namespace cudaRTBDPTRegen
 
 				float3 lightContribFromLightVertex = make_float3(0.f, 0.f, 0.f);
 
-				if ((rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+				if (/*(rayType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
 					sample.pixelContrib = 0.f;
 
 				bool isAccum = (sample.pathDepth == 0);

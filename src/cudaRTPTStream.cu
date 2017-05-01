@@ -230,7 +230,7 @@ namespace cudaRTPTStream
 
 				float pixelContrib = length(procVertex->pathOutMulTerm) * length(lightMulTerm);
 
-				if ((procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) || length(emissive) > 0.f)
+				if (/*(procVertex->pathType == RAYTYPE_DIFF && nextRayType == RAYTYPE_SPEC) ||*/ length(emissive) > 0.f)
 					pixelContrib = 0.f;
 
 				if (curand_uniform(&procVertex->randState) > pixelContrib || procVertex->pathSampleDepth + 1 >= NORMALRAY_BOUND_MAX)
