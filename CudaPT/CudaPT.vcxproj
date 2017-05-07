@@ -95,16 +95,16 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdParty\libpng\include;$(SolutionDir)3rdParty\zlib\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(SolutionDir)\3rdParty\libpng\lib;$(SolutionDir)3rdParty\zlib\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdParty\libpng\include;$(SolutionDir)3rdParty\zlib\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(SolutionDir)\3rdParty\libpng\lib;$(SolutionDir)3rdParty\zlib\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release CC20|x64'">
-    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)3rdparty\fann\include;$(SolutionDir)3rdparty\glfw\include;$(SolutionDir)3rdparty\glew\include;$(SolutionDir)3rdparty\glm\include;$(SolutionDir)3rdparty\soil\include;$(SolutionDir)3rdparty\assimp\include;$(SolutionDir)3rdparty\tbb\include;$(SolutionDir)3rdParty\libpng\include;$(SolutionDir)3rdParty\zlib\include;$(SolutionDir)3rdparty\anttweakbar\include;$(SolutionDir)include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)3rdparty\fann\lib;$(SolutionDir)3rdparty\glfw\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\glew\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\soil\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\assimp\lib\$(Configuration)\$(Platform);$(SolutionDir)3rdparty\tbb\lib\intel64\vc12;$(SolutionDir)3rdparty\anttweakbar\lib\$(Configuration)\$(Platform);$(SolutionDir)\3rdParty\libpng\lib;$(SolutionDir)3rdParty\zlib\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -126,7 +126,7 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;libpng16.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimpd.dll"
@@ -181,7 +181,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;libpng16.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimp.dll"
@@ -207,7 +207,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cudart.lib;opengl32.lib;glfw3.lib;glew32mxs.lib;SOIL.lib;assimp.lib;AntTweakBar64.lib;tbb.lib;fannfloat.lib;libpng16.lib;zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)3rdParty\assimp\lib\$(Configuration)\$(Platform)\assimp.dll" "$(TargetDir)assimp.dll"
@@ -283,6 +283,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <CudaCompile Include="..\src\cudaRTCommon.cu" />
     <CudaCompile Include="..\src\cudaRTDebug.cu" />
     <CudaCompile Include="..\src\cudaRTPT.cu" />
+    <CudaCompile Include="..\src\cudaRTPTAtomicSpec.cu" />
     <CudaCompile Include="..\src\cudaRTPTStream.cu" />
     <CudaCompile Include="..\src\cudaRTPTStreamSpec.cu" />
     <CudaCompile Include="..\src\cudaspechelper.cu" />

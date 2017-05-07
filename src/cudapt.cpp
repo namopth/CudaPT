@@ -481,43 +481,70 @@ void CUDAPTWindow::BrowseModel()
 
 void CUDAPTWindow::BrowseAndSaveResult()
 {
-	std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0","BMP");
+	std::string file = NPOSHelper::BrowseSaveFile("*.PNG\0", "PNG");
 	if (file.empty())
 		return;
 	if (m_raytracer.GetResult())
 	{
-		unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+		float* data = new float[m_iSizeW * m_iSizeH * 3];
 		{
 			auto f = [&](const tbb::blocked_range< int >& range) {
 				for (unsigned int i = range.begin(); i < range.end(); i++)
 				{
 					uint32 y = i / m_iSizeW;
 					uint32 x = i - y * m_iSizeW;
-					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x)*3;
-					data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f)) * 255;
-					data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f)) * 255;
-					data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f)) * 255;
+					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
+					data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f));
+					data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f));
+					data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f));
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
 		}
-		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+		NPGLHelper::saveRGBImagePNG(data, file.c_str(), m_iSizeW, m_iSizeH);
 		DELETE_ARRAY(data);
 	}
 	else
 	{
 		NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
 	}
+	//std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0","BMP");
+	//if (file.empty())
+	//	return;
+	//if (m_raytracer.GetResult())
+	//{
+	//	unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+	//	{
+	//		auto f = [&](const tbb::blocked_range< int >& range) {
+	//			for (unsigned int i = range.begin(); i < range.end(); i++)
+	//			{
+	//				uint32 y = i / m_iSizeW;
+	//				uint32 x = i - y * m_iSizeW;
+	//				uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x)*3;
+	//				data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f)) * 255;
+	//				data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f)) * 255;
+	//				data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f)) * 255;
+	//			}
+	//		};
+	//		tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
+	//	}
+	//	NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+	//	DELETE_ARRAY(data);
+	//}
+	//else
+	//{
+	//	NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
+	//}
 }
 
 void CUDAPTWindow::BrowseAndSaveMSEResult()
 {
-	std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0", "BMP");
+	std::string file = NPOSHelper::BrowseSaveFile("*.PNG\0", "PNG");
 	if (file.empty())
 		return;
-	if (m_raytracer.GetResult() && m_pCapturedConvergedResult)
+	if (m_raytracer.GetResult())
 	{
-		unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+		float* data = new float[m_iSizeW * m_iSizeH * 3];
 		{
 			auto f = [&](const tbb::blocked_range< int >& range) {
 				for (unsigned int i = range.begin(); i < range.end(); i++)
@@ -531,20 +558,53 @@ void CUDAPTWindow::BrowseAndSaveMSEResult()
 						(m_raytracer.GetResult()[ind + 2] - m_pCapturedConvergedResult[ind + 2])
 					};
 					float mseData = (saveData[0] * saveData[0] + saveData[1] * saveData[1] + saveData[2] * saveData[2]) / 3.f;
-					data[i * 3] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
-					data[i * 3 + 1] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
-					data[i * 3 + 2] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+					data[i * 3] = fmaxf(0.f, fminf(mseData, 1.0f));
+					data[i * 3 + 1] = fmaxf(0.f, fminf(mseData, 1.0f));
+					data[i * 3 + 2] = fmaxf(0.f, fminf(mseData, 1.0f));
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
 		}
-		NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+		NPGLHelper::saveRGBImagePNG(data, file.c_str(), m_iSizeW, m_iSizeH);
 		DELETE_ARRAY(data);
 	}
 	else
 	{
 		NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
 	}
+	//std::string file = NPOSHelper::BrowseSaveFile("*.BMP\0", "BMP");
+	//if (file.empty())
+	//	return;
+	//if (m_raytracer.GetResult() && m_pCapturedConvergedResult)
+	//{
+	//	unsigned char* data = new unsigned char[m_iSizeW * m_iSizeH * 3];
+	//	{
+	//		auto f = [&](const tbb::blocked_range< int >& range) {
+	//			for (unsigned int i = range.begin(); i < range.end(); i++)
+	//			{
+	//				uint32 y = i / m_iSizeW;
+	//				uint32 x = i - y * m_iSizeW;
+	//				uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
+	//				float saveData[3] = {
+	//					(m_raytracer.GetResult()[ind] - m_pCapturedConvergedResult[ind]),
+	//					(m_raytracer.GetResult()[ind + 1] - m_pCapturedConvergedResult[ind + 1]),
+	//					(m_raytracer.GetResult()[ind + 2] - m_pCapturedConvergedResult[ind + 2])
+	//				};
+	//				float mseData = (saveData[0] * saveData[0] + saveData[1] * saveData[1] + saveData[2] * saveData[2]) / 3.f;
+	//				data[i * 3] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+	//				data[i * 3 + 1] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+	//				data[i * 3 + 2] = fmaxf(0.f, fminf(mseData, 1.0f)) * 255;
+	//			}
+	//		};
+	//		tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
+	//	}
+	//	NPGLHelper::saveRGBImageBMP(data, file.c_str(), m_iSizeW, m_iSizeH);
+	//	DELETE_ARRAY(data);
+	//}
+	//else
+	//{
+	//	NPOSHelper::CreateMessageBox("No Result Data", "Save Result Failure", NPOSHelper::MSGBOX_OK);
+	//}
 }
 
 void CUDAPTWindow::BrowseEnvSetting()

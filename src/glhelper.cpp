@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include <SOIL.h>
+#include <png.h>
 
 #include "hdrhelper.h"
 
@@ -185,6 +186,83 @@ namespace NPGLHelper
 			DEBUG_COUT(SOIL_last_result());
 		}
 		return save_result;
+	}
+
+
+	bool saveRGBImagePNG(const float* data, const char* filename, const unsigned int width, const unsigned int height)
+	{
+		FILE *fp;
+		fopen_s(&fp, filename, "wb");
+		if (!fp)
+		{
+			DEBUG_COUT("Cannot open png file: " + filename);
+			return false;
+		}
+
+		png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+		if (!png)
+		{
+			fclose(fp);
+			DEBUG_COUT("Cannot create png write struct ");
+			return false;
+		}
+
+		png_infop info = png_create_info_struct(png);
+		if (!info)
+		{
+			fclose(fp);
+			DEBUG_COUT("Cannot create png info struct ");
+			return false;
+		}
+
+		if (setjmp(png_jmpbuf(png)))
+		{
+			fclose(fp);
+			DEBUG_COUT("Set jmp failed");
+			return false;
+		}
+
+		png_init_io(png, fp);
+
+		png_set_IHDR(
+			png,
+			info,
+			width,
+			height,
+			8,
+			PNG_COLOR_TYPE_RGBA,
+			PNG_INTERLACE_NONE,
+			PNG_COMPRESSION_TYPE_DEFAULT,
+			PNG_FILTER_TYPE_DEFAULT
+			);
+
+		png_write_info(png, info);
+
+		png_bytep *row_pointers = (png_bytep*)malloc(sizeof(png_bytep*) * height);
+		for (int i = 0; i < height; i++)
+		{
+			row_pointers[i] = (png_bytep)malloc(sizeof(png_bytep) * width * 4);
+			for (int j = 0; j < width; j++)
+			{
+				row_pointers[i][j * 4] = data[(i*width + j) * 3] * 255.f;
+				row_pointers[i][j * 4 + 1] = data[(i*width + j) * 3 + 1] * 255.f;
+				row_pointers[i][j * 4 + 2] = data[(i*width + j) * 3 + 2] * 255.f;
+				row_pointers[i][j * 4 + 3] = 255.f;
+			}
+		}
+
+
+		png_write_image(png, row_pointers);
+		png_write_end(png, NULL);
+
+		for (int i = 0; i < height; i++)
+		{
+			free(row_pointers[i]);
+		}
+		free(row_pointers);
+
+		fclose(fp);
+		return true;
 	}
 
 	RenderObject::RenderObject()

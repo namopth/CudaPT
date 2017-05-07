@@ -213,5 +213,8 @@
     <CudaCompile Include="..\src\cudaRTBDPTRegen.cu">
       <Filter>Cuda Files</Filter>
     </CudaCompile>
+    <CudaCompile Include="..\src\cudaRTPTAtomicSpec.cu">
+      <Filter>Cuda Files</Filter>
+    </CudaCompile>
   </ItemGroup>
 </Project>

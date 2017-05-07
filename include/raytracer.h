@@ -4,7 +4,8 @@ DEFINE_RT(PTNaive, cudaRTPT)
 //DEFINE_RT(Regen, cudaRTPTRegen)
 DEFINE_RT(PTSC, cudaRTPTStream)
 #ifdef FULLSPECTRAL
-DEFINE_RT(PTSCSpec, cudaRTPTStreamSpec)
+//DEFINE_RT(PTSCSpec, cudaRTPTStreamSpec)
+DEFINE_RT(PTAtomicSpec, cudaRTPTAtomicSpec)
 #endif
 //DEFINE_RT(PTSCRegen, cudaRTPTStreamRegen)
 DEFINE_RT(BDPTRegen, cudaRTBDPTRegen)
@@ -26,7 +27,7 @@ DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
-//#define FULLSPECTRAL
+#define FULLSPECTRAL
 #include "mathhelper.h"
 #include "rayhelper.h"
 #include "bvhhelper.h"
@@ -228,7 +229,7 @@ public:
 		unsigned int subObjId;
 	};
 	RTScene() : m_bIsCudaDirty(true), m_bIsCudaMaterialDirty(true), m_pMaterialBar(nullptr)
-		, m_iCurrentMaterialId(-1)
+		, m_iCurrentMaterialId(-1), m_fCurrentLightPowerMultiplier(1.0f)
 	{}
 
 	inline const NPBVHHelper::CompactBVH* GetCompactBVH() const { return &m_compactBVH; }
@@ -269,6 +270,7 @@ protected:
 
 	TwBar* m_pMaterialBar;
 	int m_iCurrentMaterialId;
+	float m_fCurrentLightPowerMultiplier{ 1.0f };
 };
 
 class RTRenderer

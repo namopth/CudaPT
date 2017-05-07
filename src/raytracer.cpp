@@ -363,7 +363,7 @@ bool RTScene::BrowseSpecReflFile(float wavelengthMul, float powerMul)
 			{
 				sline >> power;
 				specDataWavelength.push_back(wavelength*wavelengthMul);
-				specDataPower.push_back(power*powerMul);
+				specDataPower.push_back(power*powerMul*m_fCurrentLightPowerMultiplier);
 				//std::cout << "spectral data: " << wavelength * 1000.0f << ", " << power*0.01f << std::endl;
 			}
 		}
@@ -378,14 +378,23 @@ bool RTScene::BrowseSpecReflFile(float wavelengthMul, float powerMul)
 
 		float lambdaInterval = (float)(NPCudaSpecHelper::c_u32LamdaEnd - NPCudaSpecHelper::c_u32LamdaStart) 
 			/ (float)NPCudaSpecHelper::c_u32SampleN;
+		float tempSpecPara[NPCudaSpecHelper::c_u32SampleN];
 		for (uint32 i = 0; i < NPCudaSpecHelper::c_u32SampleN; i++)
 		{
 			float matSpecPower = NPCudaSpecHelper::AverageSpectrum(specDataWavelength, specDataPower
 				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * i
 				, NPCudaSpecHelper::c_u32LamdaStart + lambdaInterval * (i + 1));
 			m_pMaterials[m_iCurrentMaterialId].specPara[i*NPCudaSpecHelper::c_u32SampleN + i] = matSpecPower;
+			tempSpecPara[i] = matSpecPower;
 
 			//std::cout << "spectral data: " << i << ", " << matSpecPower << std::endl;
+		}
+		NPMathHelper::Vec3 specRGB;
+		NPCudaSpecHelper::SPDToRGB(tempSpecPara, specRGB._x, specRGB._y, specRGB._z, NPCudaSpecHelper::g_baseSpec[0].GetData(), NPCudaSpecHelper::g_baseSpec[1].GetData(), NPCudaSpecHelper::g_baseSpec[2].GetData(), NPCudaSpecHelper::g_fBaseSpecIntY);
+		m_pMaterials[m_iCurrentMaterialId].diffuse = specRGB;
+		if (m_pMaterials[m_iCurrentMaterialId].emissive.length() > 0.f)
+		{
+			m_pMaterials[m_iCurrentMaterialId].emissive = specRGB;
 		}
 		isValid = true;
 	}
@@ -496,6 +505,8 @@ void RTScene::SetTWMaterialBar(const int matId)
 		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, ("ClearcoatGloss" + matName).c_str(), TW_TYPE_FLOAT, &m_pMaterials[i].clearcoatGloss, matPara.c_str()));
 
 #ifdef FULLSPECTRAL
+		ATB_ASSERT(TwAddVarRW(m_pMaterialBar, "LoadSpecMul", TW_TYPE_FLOAT
+			, &m_fCurrentLightPowerMultiplier, "label='Loading Spectral Multiplier' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadASTERSpecRefl", TwBrowseASTERSpecReflFile
 			, this, "label='Load ASTER Spectral Reflectivity' group='Full Spectral'"));
 		ATB_ASSERT(TwAddButton(m_pMaterialBar, "LoadSpecRefl", TwBrowseSpecReflFile

@@ -58,6 +58,7 @@ namespace NPGLHelper
 
 	bool saveScreenShotBMP(const char* filename, const float width, const float height);
 	bool saveRGBImageBMP(const unsigned char* data, const char* filename, const float width, const float height);
+	bool saveRGBImagePNG(const float* data, const char* filename, const unsigned int width, const unsigned int height);
 
 	class RenderObject
 	{
