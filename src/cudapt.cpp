@@ -494,9 +494,22 @@ void CUDAPTWindow::BrowseAndSaveResult()
 					uint32 y = i / m_iSizeW;
 					uint32 x = i - y * m_iSizeW;
 					uint32 ind = ((m_iSizeH - y - 1)* m_iSizeW + x) * 3;
-					data[i * 3] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f));
-					data[i * 3 + 1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f));
-					data[i * 3 + 2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f));
+					float result[3];
+					result[0] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind], 1.0f));
+					result[1] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 1], 1.0f));
+					result[2] = fmaxf(0.f, fminf(m_raytracer.GetResult()[ind + 2], 1.0f));
+
+					//exposure and gamma correction
+					for (uint32 i = 0; i < 3; i++)
+					{
+						result[i] = 1.0f - expf(-result[i] * m_fExposure);
+						result[i] = powf(result[i], 1.0f / 2.2f);
+					}
+
+					data[i * 3] = result[0];
+					data[i * 3 + 1] = result[1];
+					data[i * 3 + 2] = result[2];
+					
 				}
 			};
 			tbb::parallel_for(tbb::blocked_range< int >(0, m_iSizeW * m_iSizeH), f);
