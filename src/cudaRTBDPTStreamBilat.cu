@@ -35,21 +35,21 @@ namespace cudaRTBDPTStreamBilat
 	NPAttrHelper::Attrib g_uiBFilterIter("Filter Iteration", 1u);
 	NPAttrHelper::Attrib g_uiRenderIter("Render Iteration", 5u);
 
-	CUDA_RT_COMMON_ATTRIBS_N(9)
-	CUDA_RT_COMMON_ATTRIBS_BGN
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
-	//CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Filter Color E Delta, g_fBFilterColorEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Filter Pos E Delta, g_fBFilterPosEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Filter Norm E Delta, g_fBFilterNormEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Filter Emit E Delta, g_fBFilterEmitEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Diff E Delta, g_fBFilterDiffEuDelta)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Radius, g_uiBFilterRadius)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Iteration, g_uiBFilterIter)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(7, Debug Mode, g_enumDebugMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(8, Render Iteration, g_uiRenderIter)
-	CUDA_RT_COMMON_ATTRIBS_END
+	RT_ATTRIBS_N(9)
+	RT_ATTRIBS_BGN
+	//RT_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
+	//RT_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredMaxAdaptiveSampling)
+	//RT_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
+	RT_ATTRIB_DECLARE(0, Filter Color E Delta, g_fBFilterColorEuDelta)
+	RT_ATTRIB_DECLARE(1, Filter Pos E Delta, g_fBFilterPosEuDelta)
+	RT_ATTRIB_DECLARE(2, Filter Norm E Delta, g_fBFilterNormEuDelta)
+	RT_ATTRIB_DECLARE(3, Filter Emit E Delta, g_fBFilterEmitEuDelta)
+	RT_ATTRIB_DECLARE(4, Filter Diff E Delta, g_fBFilterDiffEuDelta)
+	RT_ATTRIB_DECLARE(5, Filter Radius, g_uiBFilterRadius)
+	RT_ATTRIB_DECLARE(6, Filter Iteration, g_uiBFilterIter)
+	RT_ATTRIB_DECLARE(7, Debug Mode, g_enumDebugMode)
+	RT_ATTRIB_DECLARE(8, Render Iteration, g_uiRenderIter)
+	RT_ATTRIBS_END
 
 	uint g_uiFilterResultInd = 0;
 	float* g_devFilteredResult[2] = { nullptr, nullptr };

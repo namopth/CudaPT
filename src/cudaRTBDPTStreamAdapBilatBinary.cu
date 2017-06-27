@@ -45,29 +45,29 @@ namespace cudaRTBDPTStreamAdapBilatBinary
 #endif
 
 #ifdef PERFBREAKDOWN
-	CUDA_RT_COMMON_ATTRIBS_N(15)
+	RT_ATTRIBS_N(15)
 #else
-	CUDA_RT_COMMON_ATTRIBS_N(10)
+	RT_ATTRIBS_N(10)
 #endif
-	CUDA_RT_COMMON_ATTRIBS_BGN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredSamplingN)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(4, Filter Color EuD, g_fFilterColorEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(5, Filter Pos EuD, g_fFilterPosEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(6, Filter Norm EuD, g_fFilterNormEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(7, Filter Diff EuD, g_fFilterDiffEuD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(8, Filter Radius, g_uiFilterRadius)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(9, Filter Diffuse Flag, g_bFilterDiffuse)
+	RT_ATTRIBS_BGN
+	RT_ATTRIB_DECLARE(0, Adaptive Mode, g_enumAdapMode)
+	RT_ATTRIB_DECLARE(1, Desired Max Sampling, g_uiDesiredSamplingN)
+	RT_ATTRIB_DECLARE(2, Min Trace Probability, g_fMinTraceProb)
+	RT_ATTRIB_DECLARE(3, Debug Mode, g_enumDebugMode)
+	RT_ATTRIB_DECLARE(4, Filter Color EuD, g_fFilterColorEuD)
+	RT_ATTRIB_DECLARE(5, Filter Pos EuD, g_fFilterPosEuD)
+	RT_ATTRIB_DECLARE(6, Filter Norm EuD, g_fFilterNormEuD)
+	RT_ATTRIB_DECLARE(7, Filter Diff EuD, g_fFilterDiffEuD)
+	RT_ATTRIB_DECLARE(8, Filter Radius, g_uiFilterRadius)
+	RT_ATTRIB_DECLARE(9, Filter Diffuse Flag, g_bFilterDiffuse)
 #ifdef PERFBREAKDOWN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(10, Avg Filter Time, g_fAvgProcessTimeA)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(11, Avg MSE Time, g_fAvgProcessTimeB)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(12, Avg Gen Time, g_fAvgProcessTimeC)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(13, Avg Trace Time, g_fAvgProcessTimeD)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(14, Avg Accum Time, g_fAvgProcessTimeE)
+	RT_ATTRIB_DECLARE(10, Avg Filter Time, g_fAvgProcessTimeA)
+	RT_ATTRIB_DECLARE(11, Avg MSE Time, g_fAvgProcessTimeB)
+	RT_ATTRIB_DECLARE(12, Avg Gen Time, g_fAvgProcessTimeC)
+	RT_ATTRIB_DECLARE(13, Avg Trace Time, g_fAvgProcessTimeD)
+	RT_ATTRIB_DECLARE(14, Avg Accum Time, g_fAvgProcessTimeE)
 #endif
-	CUDA_RT_COMMON_ATTRIBS_END
+	RT_ATTRIBS_END
 
 	struct LightVertex
 	{

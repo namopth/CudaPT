@@ -8,11 +8,11 @@ namespace cudaRTBVHDebug
 	NPAttrHelper::Attrib g_enumDebugMode("BVHDebugMode", g_enumDebugModeName, 3, 0);
 	NPAttrHelper::Attrib g_uiSpecDepth("SpecifiedBVHDepth", 0);
 
-	CUDA_RT_COMMON_ATTRIBS_N(2)
-	CUDA_RT_COMMON_ATTRIBS_BGN
-	CUDA_RT_COMMON_ATTRIB_DECLARE(0, Debug Mode, g_enumDebugMode)
-	CUDA_RT_COMMON_ATTRIB_DECLARE(1, BVH Depth, g_uiSpecDepth)
-	CUDA_RT_COMMON_ATTRIBS_END
+	RT_ATTRIBS_N(2)
+	RT_ATTRIBS_BGN
+	RT_ATTRIB_DECLARE(0, Debug Mode, g_enumDebugMode)
+	RT_ATTRIB_DECLARE(1, BVH Depth, g_uiSpecDepth)
+	RT_ATTRIBS_END
 
 	float* g_devResultData = nullptr;
 	size_t g_resultDataSize = 0;

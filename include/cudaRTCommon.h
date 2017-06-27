@@ -10,20 +10,6 @@
 
 #include <curand_kernel.h>
 
-#define CUDA_RT_COMMON_ATTRIBS_BGN  NPAttrHelper::Attrib* GetAttribute(unsigned __int32 ind, std::string &name) \
-				{ \
-		switch (ind) \
-								{
-#define CUDA_RT_COMMON_ATTRIB_DECLARE(__N__, __NAME__, __VAR__) case __N__: name = #__NAME__; return &__VAR__;
-#define CUDA_RT_COMMON_ATTRIBS_END } \
-		return nullptr; \
-				}
-#define CUDA_RT_COMMON_ATTRIBS_N(__N__) \
-	unsigned __int32 GetAttribsN() \
-				{ \
-		return __N__;\
-				}
-
 #define BVH_DEPTH_MAX 32
 #define BVH_TRACE_MAX 2048 //512
 

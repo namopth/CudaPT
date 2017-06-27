@@ -4,9 +4,9 @@
 #define NORMALRAY_BOUND_MAX 10
 namespace cudaRTPT
 {
-	CUDA_RT_COMMON_ATTRIBS_N(0)
-	CUDA_RT_COMMON_ATTRIBS_BGN
-	CUDA_RT_COMMON_ATTRIBS_END
+	RT_ATTRIBS_N(0)
+	RT_ATTRIBS_BGN
+	RT_ATTRIBS_END
 
 	float* g_devResultData = nullptr;
 	float* g_devAccResultData = nullptr;

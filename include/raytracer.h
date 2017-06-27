@@ -28,6 +28,21 @@ DEFINE_RT(Cuda BVH Debug, cudaRTBVHDebug)
 #ifndef RAYTRACER_H
 #define RAYTRACER_H
 
+
+#define RT_ATTRIBS_BGN  NPAttrHelper::Attrib* GetAttribute(unsigned __int32 ind, std::string &name) \
+				{ \
+		switch (ind) \
+								{
+#define RT_ATTRIB_DECLARE(__N__, __NAME__, __VAR__) case __N__: name = #__NAME__; return &__VAR__;
+#define RT_ATTRIBS_END } \
+		return nullptr; \
+				}
+#define RT_ATTRIBS_N(__N__) \
+	unsigned __int32 GetAttribsN() \
+				{ \
+		return __N__;\
+				}
+
 //#define FULLSPECTRAL
 #include "mathhelper.h"
 #include "rayhelper.h"

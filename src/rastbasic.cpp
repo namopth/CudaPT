@@ -7,6 +7,10 @@
 
 namespace rastBasic
 {
+	RT_ATTRIBS_N(0)
+	RT_ATTRIBS_BGN
+	RT_ATTRIBS_END
+
 	bool Render(NPMathHelper::Vec3 camPos, NPMathHelper::Vec3 camDir, NPMathHelper::Vec3 camUp
 		, float fov, RTScene* scene, float width, float height, float* result)
 	{
@@ -15,13 +19,5 @@ namespace rastBasic
 	void CleanMem()
 	{
 
-	}
-	NPAttrHelper::Attrib* GetAttribute(unsigned __int32 ind, std::string &name)
-	{
-		return nullptr;
-	}
-	unsigned __int32 GetAttribsN()
-	{
-		return 0;
 	}
 }
