@@ -161,6 +161,9 @@
     <ClCompile Include="..\src\conffilehelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\rastbasic.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\shader\FinalComposeVS.glsl">

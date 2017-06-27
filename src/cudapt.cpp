@@ -10,8 +10,8 @@
 #include "oshelper.h"
 #include "conffilehelper.h"
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 800 //1920
+#define WINDOW_HEIGHT 600 //1080
 
 int main()
 {

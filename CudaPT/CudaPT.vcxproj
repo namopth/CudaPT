@@ -265,6 +265,7 @@ copy /Y "$(SolutionDir)3rdparty\tbb\bin\intel64\vc12\tbb.dll" "$(TargetDir)tbb.d
     <ClCompile Include="..\src\hdrhelper.cpp" />
     <ClCompile Include="..\src\mathelper.cpp" />
     <ClCompile Include="..\src\oshelper.cpp" />
+    <ClCompile Include="..\src\rastbasic.cpp" />
     <ClCompile Include="..\src\raytracer.cpp" />
   </ItemGroup>
   <ItemGroup>

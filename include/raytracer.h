@@ -1,4 +1,5 @@
 #ifdef RT_XGEN
+DEFINE_RT(RasterizeBasic, rastBasic)
 DEFINE_RT(PTNaive, cudaRTPT)
 //DEFINE_RT(PTNaiveRR, cudaRTPTRR)
 //DEFINE_RT(Regen, cudaRTPTRegen)
